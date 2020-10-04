@@ -35,6 +35,7 @@ class AbstractEnvRunner(ABC):
         self.callback = None  # type: Optional[BaseCallback]
         self.continue_training = True
         self.n_envs = n_envs
+        self.writer = None
 
     def run(self, callback: Optional[BaseCallback] = None) -> Any:
         """
@@ -54,6 +55,54 @@ class AbstractEnvRunner(ABC):
         """
         raise NotImplementedError
 
+
+
+class AbstractDictEnvRunner(ABC):
+    def __init__(self, *, env: Union[gym.Env, VecEnv], model: 'BaseRLModel', n_steps: int):
+        """
+        Collect experience by running `n_steps` in the environment.
+        Note: if this is a `VecEnv`, the total number of steps will
+        be `n_steps * n_envs`.
+
+        :param env: (Union[gym.Env, VecEnv]) The environment to learn from
+        :param model: (BaseRLModel) The model to learn
+        :param n_steps: (int) The number of steps to run for each environment
+        """
+        self.env = env
+        self.model = model
+        n_envs = env.num_envs
+        self.batch_ob_shape = dict()
+        self.obs = dict()
+        obs = env.reset()
+        for k in env.observation_space.spaces:
+            self.batch_ob_shape[k] = (n_envs * n_steps,) + env.observation_space.spaces[k].shape
+            self.obs[k] = np.zeros((n_envs,) + env.observation_space.spaces[k].shape,
+                                   dtype=env.observation_space.spaces[k].dtype.name)
+            self.obs[k] = obs[k]
+        self.n_steps = n_steps
+        self.states = model.initial_state
+        self.dones = [False for _ in range(n_envs)]
+        self.callback = None  # type: Optional[BaseCallback]
+        self.continue_training = True
+        self.n_envs = n_envs
+
+    def run(self, callback: Optional[BaseCallback] = None) -> Any:
+        """
+        Collect experience.
+
+        :param callback: (Optional[BaseCallback]) The callback that will be called
+            at each environment step.
+        """
+        self.callback = callback
+        self.continue_training = True
+        return self._run()
+
+    @abstractmethod
+    def _run(self) -> Any:
+        """
+        This method must be overwritten by child class.
+        """
+        raise NotImplementedError
 
 def traj_segment_generator(policy, env, horizon, reward_giver=None, gail=False, callback=None):
     """

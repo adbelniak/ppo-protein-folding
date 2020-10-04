@@ -19,6 +19,7 @@ def find_tf_dependency():
     install_tf, tf_gpu = False, False
     try:
         import tensorflow as tf
+        print(tf.__version__)
         if tf.__version__ < LooseVersion('1.8.0'):
             install_tf = True
             # check if a gpu version is needed
@@ -37,10 +38,10 @@ def find_tf_dependency():
             tf_gpu = True
 
     tf_dependency = []
-    if install_tf:
-        tf_dependency = ['tensorflow-gpu>=1.8.0,<2.0.0'] if tf_gpu else ['tensorflow>=1.8.0,<2.0.0']
-        if tf_gpu:
-            print("A GPU was detected, tensorflow-gpu will be installed")
+    # if install_tf:
+    #     tf_dependency = ['tensorflow>=1.8.0,<2.0.0'] if tf_gpu else ['tensorflow>=1.8.0,<2.0.0']
+    #     if tf_gpu:
+    #         print("A GPU was detected, tensorflow-gpu will be installed")
 
     return tf_dependency
 

@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from gym.spaces import Discrete, Box, MultiBinary, MultiDiscrete
+from gym.spaces import Discrete, Box, MultiBinary, MultiDiscrete, Dict
 
 
 def observation_input(ob_space, batch_size=None, name='Ob', scale=False):
@@ -45,6 +45,16 @@ def observation_input(ob_space, batch_size=None, name='Ob', scale=False):
             in enumerate(tf.split(observation_ph, len(ob_space.nvec), axis=-1))
         ], axis=-1)
         return observation_ph, processed_observations
+    elif isinstance(ob_space, Dict):
+        observation_ph_array = {}
+        processed_observations = {}
+        for key in ob_space.spaces.keys():
+            observation_ph, processed_observation = observation_input(ob_space[key], batch_size, name + '_' + key,
+                                                                      scale)
+            observation_ph_array[key] = observation_ph
+            processed_observations[key] = processed_observation
+
+        return observation_ph_array, processed_observations
 
     else:
         raise NotImplementedError("Error: the model does not support input space of type {}".format(
