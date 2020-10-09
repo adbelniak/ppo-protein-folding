@@ -2,7 +2,7 @@ from collections import OrderedDict
 import numpy as np
 from typing import Sequence
 
-from gym_rosetta.envs import DQNProteinFoldEnv, ProteinFoldEnv
+from gym_rosetta.envs import ProteinFoldEnv
 
 from stable_baselines.common.vec_env.base_vec_env import VecEnv
 from stable_baselines.common.vec_env.util import copy_obs_dict, dict_to_obs, obs_space_info

@@ -200,6 +200,11 @@ class DictPPO2(ActorCriticRLModel):
                         if self.full_tensorboard_log:
                             for var in self.params:
                                 tf.summary.histogram(var.name, var)
+                                if var.name == 'model/encoder/encoder_layer/multi_head_attention/dense/kernel:0':
+                                    for i in range(3):
+                                        for j in range(3):
+                                            tf.summary.scalar(var.name, var[i, j])
+
                     grads = tf.gradients(loss, self.params)
                     if self.max_grad_norm is not None:
                         grads, _grad_norm = tf.clip_by_global_norm(grads, self.max_grad_norm)
@@ -290,6 +295,7 @@ class DictPPO2(ActorCriticRLModel):
                     td_map, options=run_options, run_metadata=run_metadata)
                 writer.add_run_metadata(run_metadata, 'step%d' % (update * update_fac))
             else:
+
                 summary, policy_loss, value_loss, policy_entropy, approxkl, clipfrac, _ = self.sess.run(
                     [self.summary, self.pg_loss, self.vf_loss, self.entropy, self.approxkl, self.clipfrac, self._train],
                     td_map)

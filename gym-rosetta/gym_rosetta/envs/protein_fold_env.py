@@ -49,7 +49,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
         self.observation_space = spaces.Dict({
             "energy": spaces.Box(low=np.array([-np.inf]), high=np.array([np.inf]), dtype=np.float32),
-            "backbone": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH * 2, 2,)),
+            "backbone": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH , 3,)),
             "protein_name": spaces.Discrete(2),
             "residue_number": spaces.MultiBinary(20),
             "step_to_end": spaces.Discrete(1),
@@ -153,9 +153,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         phis = np.concatenate((phis, np.zeros(rest_zeros)))
         one_hot = np.zeros(MAX_LENGTH)
         one_hot[self.current_residue + 1] = 1
-        backbone_geometry = [list(a) for a in zip(psis, phis)]
-        one_hot = [list(a) for a in zip(one_hot, one_hot)]
-        backbone_geometry = np.concatenate((backbone_geometry, one_hot), axis=0)
+        backbone_geometry = [list(a) for a in zip(psis, phis, one_hot)]
         zeros = np.zeros(20)
         zeros[self.current_residue] = 1
         return {
@@ -163,7 +161,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             "energy": [self.difference_energy()],
             "protein_name": PROTEIN_LIST.index(self.name),
             "residue_number": zeros,
-            "step_to_end": (128 - self.move_counter / 128),
+            "step_to_end": (256 - self.move_counter / 256),
             "residue_chain": self.encoded_residue_sequence,
             "current_residue_pose": [psis[self.current_residue + 1], phis[self.current_residue + 1]]
         }
@@ -235,7 +233,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
             self.done = True
 
-        if self.move_counter >= 128:
+        if self.move_counter >= 256:
             # reward +=  self.start_distance - distance / self.start_distance
             self.done = True
 

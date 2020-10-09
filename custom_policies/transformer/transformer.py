@@ -71,7 +71,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
     def __init__(self, d_model, num_heads):
         super(MultiHeadAttention, self).__init__()
         self.num_heads = num_heads
-        d_model = d_model * 6
+        d_model = d_model
         self.d_model = d_model
 
         assert d_model % self.num_heads == 0
@@ -82,7 +82,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.wk = tf.keras.layers.Dense(d_model)
         self.wv = tf.keras.layers.Dense(d_model)
 
-        self.dense = tf.keras.layers.Dense(d_model // 6)
+        self.dense = tf.keras.layers.Dense(d_model)
 
     def split_heads(self, x, batch_size):
         """Split the last dimension into (num_heads, depth).
@@ -133,12 +133,12 @@ class EncoderLayer(tf.keras.layers.Layer):
 
     def call(self, x, mask):
         attn_output, _ = self.mha(x, x, x, mask)  # (batch_size, input_seq_len, d_model)
-        attn_output = self.dropout1(attn_output)
-        out1 = x + attn_output  # (batch_size, input_seq_len, d_model)
+        # attn_output = self.dropout1(attn_output)
+        out1 = self.layernorm1(x + attn_output)  # (batch_size, input_seq_len, d_model)
 
         ffn_output = self.ffn(out1)  # (batch_size, input_seq_len, d_model)
-        ffn_output = self.dropout2(ffn_output)
-        out2 = out1 + ffn_output  # (batch_size, input_seq_len, d_model)
+        # ffn_output = self.dropout2(ffn_output)
+        out2 = self.layernorm2(out1 + ffn_output)  # (batch_size, input_seq_len, d_model)
         return out2
 
 
@@ -164,9 +164,9 @@ class Encoder(tf.keras.layers.Layer):
         # adding embedding and position encoding.
         # x = self.embedding(x)  # (batch_size, input_seq_len, d_model)
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
-        x += self.pos_encoding[:, :seq_len, :]
+        # x += self.pos_encoding[:, :seq_len, :]
 
-        x = self.dropout(x)
+        # x = self.dropout(x)
 
         for i in range(self.num_layers):
             x = self.enc_layers[i](x, mask)
