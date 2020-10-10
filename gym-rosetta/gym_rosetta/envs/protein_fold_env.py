@@ -49,12 +49,9 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
         self.observation_space = spaces.Dict({
             "energy": spaces.Box(low=np.array([-np.inf]), high=np.array([np.inf]), dtype=np.float32),
-            "backbone": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH , 3,)),
+            "backbone": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, 3 + len(RESIDUE_LETTERS),)),
             "protein_name": spaces.Discrete(2),
-            "residue_number": spaces.MultiBinary(20),
             "step_to_end": spaces.Discrete(1),
-            "residue_chain": spaces.Box(low=0, high=1, shape=(MAX_LENGTH, len(RESIDUE_LETTERS))),
-            "current_residue_pose": spaces.Box(low=-1, high=1, shape=(2,)),
         })
         self.action_space = spaces.MultiDiscrete([3, len(ANGLE_MOVE)])
         # self.action_space = spaces.Box(low=-10, high=10, shape=(MAX_LENGTH,))
@@ -141,8 +138,10 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         # psis = np.divide(
         #     self.target_protein_pose.psi(self.current_residue + 1) - self.protein_pose.psi(self.current_residue + 1),
         #     180.0)
-        psis = np.divide([self.target_protein_pose.psi(i + 1) - self.protein_pose.psi(i + 1) for i in range(self.protein_pose.total_residue())], 180.0)
-        phis = np.divide([self.target_protein_pose.phi(i + 1) - self.protein_pose.phi(i + 1) for i in range(self.protein_pose.total_residue())], 180.0)
+        psis = np.divide([self.target_protein_pose.psi(i + 1) - self.protein_pose.psi(i + 1) for i in
+                          range(self.protein_pose.total_residue())], 180.0)
+        phis = np.divide([self.target_protein_pose.phi(i + 1) - self.protein_pose.phi(i + 1) for i in
+                          range(self.protein_pose.total_residue())], 180.0)
 
         # omegas = np.divide([self.target_protein_pose.omega(i + 1) - self.protein_pose.omega(i + 1) for i in range(self.protein_pose.total_residue())], 180.0)
         # phis = np.divide(
@@ -153,17 +152,13 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         phis = np.concatenate((phis, np.zeros(rest_zeros)))
         one_hot = np.zeros(MAX_LENGTH)
         one_hot[self.current_residue + 1] = 1
-        backbone_geometry = [list(a) for a in zip(psis, phis, one_hot)]
-        zeros = np.zeros(20)
-        zeros[self.current_residue] = 1
+        backbone_geometry = [np.concatenate(([psi, phi, one_hot], encoded)) for psi, phi, one_hot, encoded in
+                             zip(psis, phis, one_hot, self.encoded_residue_sequence)]
         return {
             "backbone": backbone_geometry,
             "energy": [self.difference_energy()],
             "protein_name": PROTEIN_LIST.index(self.name),
-            "residue_number": zeros,
             "step_to_end": (256 - self.move_counter / 256),
-            "residue_chain": self.encoded_residue_sequence,
-            "current_residue_pose": [psis[self.current_residue + 1], phis[self.current_residue + 1]]
         }
 
     def save_best_matches(self):
@@ -205,7 +200,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         torsion = action[0]
         if torsion < 2:
             current_angle_distance = self.get_residue_distance(torsion, self.current_residue)
-            reward += self.prev_residues_angle_distane[(self.current_residue + 1) * 2 + torsion] - current_angle_distance
+            reward += self.prev_residues_angle_distane[
+                          (self.current_residue + 1) * 2 + torsion] - current_angle_distance
             self.prev_residues_angle_distane[(self.current_residue + 1) * 2 + torsion] = current_angle_distance
         if not self.move_counter % 4:
             self.current_residue += 1
@@ -233,7 +229,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
             self.done = True
 
-        if self.move_counter >= 256:
+        if self.move_counter >= 1024:
             # reward +=  self.start_distance - distance / self.start_distance
             self.done = True
 
@@ -245,7 +241,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         return np.random.choice(os.listdir(dir))
 
     def reset(self, **kwargs):
-        protein_name = kwargs["name"]
+        dir = 'protein_data/short_valid'
+        protein_name = np.random.choice(os.listdir(dir))
         if self.start_distance > self.best_distance:
             self.write_best_conformation(self.best_distance)
         if self.validation:

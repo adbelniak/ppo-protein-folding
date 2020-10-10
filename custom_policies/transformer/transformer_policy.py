@@ -1,4 +1,5 @@
 import tensorflow as tf
+from gym_rosetta.envs.protein_fold_env import RESIDUE_LETTERS
 
 from stable_baselines.common.policies import ActorCriticPolicy, mlp_extractor
 from stable_baselines.common.tf_layers import linear
@@ -14,7 +15,6 @@ class TransformerPolicy(ActorCriticPolicy):
         super(TransformerPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse)
         encoder = TransformerPolicy.get_common_police_network()
 
-
         self._kwargs_check(feature_extraction, kwargs)
 
         if net_arch is None:
@@ -27,8 +27,7 @@ class TransformerPolicy(ActorCriticPolicy):
 
             with_energy = tf.layers.flatten(transformer_encoded)
             with_energy = tf.keras.layers.Concatenate()(
-                [with_energy, self.processed_obs['current_residue_pose'], self.processed_obs['residue_number'],
-                 self.processed_obs['step_to_end']])
+                [with_energy, self.processed_obs['step_to_end']])
             pi_latent, vf_latent = mlp_extractor(with_energy, net_arch, act_fun)
 
             self._value_fn = linear(vf_latent, 'vf', 1)
@@ -58,7 +57,7 @@ class TransformerPolicy(ActorCriticPolicy):
     @classmethod
     def get_common_police_network(cls):
         num_layers = 2
-        d_model = 3
+        d_model = 3 + len(RESIDUE_LETTERS)
         num_heads = 3
         dff = 128
         pe_input = 32

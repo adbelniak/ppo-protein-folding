@@ -180,7 +180,7 @@ def make_rosetta_env(env_id, num_env, seed, wrapper_kwargs=None,
             env = gym.make(env_id)
             env.seed(seed + rank)
             env = Monitor(env, logger.get_dir() and os.path.join(logger.get_dir(), str(rank)),
-                          allow_early_resets=allow_early_resets, reset_keywords=('name',))
+                          allow_early_resets=allow_early_resets, reset_keywords=())
             # return wrap_deepmind(env, **wrapper_kwargs)
             return env
         return _thunk

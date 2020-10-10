@@ -16,7 +16,6 @@ _build/
 
 # Setuptools distribution and build folders.
 /dist/
-/build
 keys/
 
 # Virtualenv

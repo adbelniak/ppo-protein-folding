@@ -4,6 +4,7 @@ from typing import Sequence
 
 import gym
 import numpy as np
+from gym_rosetta.envs import ProteinFoldEnv
 
 from stable_baselines.common.vec_env.base_vec_env import VecEnv, CloudpickleWrapper
 
@@ -117,7 +118,8 @@ class SubprocVecEnv(VecEnv):
 
     def reset(self):
         for remote in self.remotes:
-            remote.send(('reset', None))
+            protein_name = ProteinFoldEnv.get_new_pdb_file()
+            remote.send(('reset', protein_name))
         obs = [remote.recv() for remote in self.remotes]
         return _flatten_obs(obs, self.observation_space)
 
