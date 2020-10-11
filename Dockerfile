@@ -1,12 +1,17 @@
 FROM pyrosetta
 
-RUN \
-    pip install pip --upgrade && \
-    pip install -r requirements.txt && \
-    rm -rf $HOME/.cache/pip
+RUN mkdir /proteinFolding
 
-COPY ./setup.py ${CODE_DIR}/stable-baselines/setup.py
+COPY . /proteinFolding
 
-ENV PATH=$VENV/bin:$PATH
+RUN cd proteinFolding && \
+    pip3 install -r requirements.txt && \
+    rm -rf $HOME/.cache/pip && \
+
+RUN cd proteinFolding/stable_baseline && \
+    pip3 install .
+
+RUN cd proteinFolding/gym-rosetta && \
+    pip3 install .
 
 CMD /bin/bash

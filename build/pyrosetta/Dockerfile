@@ -13,5 +13,5 @@ RUN pip3 install setuptools --upgrade
 
 RUN tar -xvjf PyRosetta4.Release.python36.ubuntu.release-267.tar.bz2 && \
     rm PyRosetta4.Release.python36.ubuntu.release-267.tar.bz2 && \
-    cd PyRosetta4.Release.python36.ubuntu.release-267.tar.bz2/setup/ && \
+    cd PyRosetta4.Release.python36.ubuntu.release-267/setup/ && \
     python3 setup.py install
