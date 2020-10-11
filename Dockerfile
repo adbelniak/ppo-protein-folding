@@ -1,4 +1,4 @@
-FROM rosetta
+FROM pyrosetta
 
 RUN \
     pip install pip --upgrade && \
