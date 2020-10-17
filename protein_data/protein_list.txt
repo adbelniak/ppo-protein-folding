@@ -1,1 +1,5 @@
 https://files.rcsb.org/download/1EDP.pdb
+https://files.rcsb.org/download/5KK9.pdb
+https://files.rcsb.org/download/6f27.pdb
+https://files.rcsb.org/download/1l2y.pdb
+https://files.rcsb.org/download/1qgm.pdb

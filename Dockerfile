@@ -12,7 +12,7 @@ RUN pip3 install -r requirements.txt && \
 RUN cd stable_baseline && \
     pip3 install .
 
-RUN pip3 pip install -e gym-rosetta
+RUN pip3 install -e gym-rosetta
 
 RUN git clone https://github.com/harmslab/pdbtools.git && \
     pip3 install -e pdbtools

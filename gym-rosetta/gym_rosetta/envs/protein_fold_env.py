@@ -27,7 +27,7 @@ RESIDUE_LETTERS = [
 MAX_LENGTH = 32
 PROTEIN_LIST = None
 try:
-    PROTEIN_LIST = os.listdir('protein_data/short_modified')
+    PROTEIN_LIST = os.listdir('protein_data/short')
 except:
     pass
 
@@ -212,8 +212,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         # reward = 0
         energy = self.scorefxn(self.protein_pose)
         distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
-        if self.prev_energy:
-            reward += (self.prev_energy - energy) / self.start_energy
+        # if self.prev_energy:
+        #     reward += (self.prev_energy - energy) / self.start_energy
 
         if self.best_distance > distance:
             if distance < self.start_distance * 0.5:
@@ -237,20 +237,20 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
     @staticmethod
     def get_new_pdb_file():
-        dir = 'protein_data/short_modified'
+        dir = 'protein_data/short'
         return np.random.choice(os.listdir(dir))
 
     def reset(self, **kwargs):
-        dir = 'protein_data/short_modified'
+        dir = 'protein_data/short'
         protein_name = np.random.choice(os.listdir(dir))
         if self.start_distance > self.best_distance:
             self.write_best_conformation(self.best_distance)
         if self.validation:
             self.name = protein_name
-            dir = 'protein_data/short_modified'
+            dir = 'protein_data/short'
         else:
             self.name = protein_name
-            dir = 'protein_data/short_modified'
+            dir = 'protein_data/short'
 
         self.target_protein_pose = pose_from_pdb(os.path.join(dir, self.name))
         self.prev_residues_angle_distane = {}
