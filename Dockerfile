@@ -9,7 +9,7 @@ WORKDIR proteinFolding
 RUN pip3 install -r requirements.txt && \
     rm -rf $HOME/.cache/pip
 
-RUN cd /stable_baseline && \
+RUN cd stable_baseline && \
     pip3 install .
 
 RUN pip3 pip install -e gym-rosetta
