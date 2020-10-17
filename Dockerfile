@@ -7,7 +7,7 @@ COPY . /proteinFolding
 WORKDIR proteinFolding
 
 RUN pip3 install -r requirements.txt && \
-    rm -rf $HOME/.cache/pip && \
+    rm -rf $HOME/.cache/pip
 
 RUN cd /stable_baseline && \
     pip3 install .

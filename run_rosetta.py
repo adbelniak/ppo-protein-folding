@@ -14,7 +14,7 @@ def run():
     init()
 
     seed = 2
-    env = make_rosetta_env("gym_rosetta:protein-fold-v0", 16, seed, use_subprocess=True)
+    env = make_rosetta_env("gym_rosetta:protein-fold-v0", 128, seed, use_subprocess=False)
     # env.shuffle = True
     # env = RossettaVecNormalize(env)
 
