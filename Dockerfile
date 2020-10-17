@@ -1,17 +1,20 @@
 FROM pyrosetta
 
+RUN pip3 install --upgrade pip
 RUN mkdir /proteinFolding
 
 COPY . /proteinFolding
+WORKDIR proteinFolding
 
-RUN cd proteinFolding && \
-    pip3 install -r requirements.txt && \
+RUN pip3 install -r requirements.txt && \
     rm -rf $HOME/.cache/pip && \
 
-RUN cd proteinFolding/stable_baseline && \
+RUN cd /stable_baseline && \
     pip3 install .
 
-RUN cd proteinFolding/gym-rosetta && \
-    pip3 install .
+RUN pip3 pip install -e gym-rosetta
+
+RUN git clone https://github.com/harmslab/pdbtools.git && \
+    pip3 install -e pdbtools
 
 CMD /bin/bash

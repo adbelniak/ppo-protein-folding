@@ -27,7 +27,7 @@ RESIDUE_LETTERS = [
 MAX_LENGTH = 32
 PROTEIN_LIST = None
 try:
-    PROTEIN_LIST = os.listdir('protein_data/short')
+    PROTEIN_LIST = os.listdir('protein_data/short_modified')
 except:
     pass
 
@@ -237,20 +237,20 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
     @staticmethod
     def get_new_pdb_file():
-        dir = 'protein_data/short'
+        dir = 'protein_data/short_modified'
         return np.random.choice(os.listdir(dir))
 
     def reset(self, **kwargs):
-        dir = 'protein_data/short'
+        dir = 'protein_data/short_modified'
         protein_name = np.random.choice(os.listdir(dir))
         if self.start_distance > self.best_distance:
             self.write_best_conformation(self.best_distance)
         if self.validation:
             self.name = protein_name
-            dir = 'protein_data/short'
+            dir = 'protein_data/short_modified'
         else:
             self.name = protein_name
-            dir = 'protein_data/short'
+            dir = 'protein_data/short_modified'
 
         self.target_protein_pose = pose_from_pdb(os.path.join(dir, self.name))
         self.prev_residues_angle_distane = {}
