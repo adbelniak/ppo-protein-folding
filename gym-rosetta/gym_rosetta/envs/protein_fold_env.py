@@ -49,9 +49,10 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
         self.observation_space = spaces.Dict({
             # "energy": spaces.Box(low=np.array([-np.inf]), high=np.array([np.inf]), dtype=np.float32),
-            "backbone": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, 3 + len(RESIDUE_LETTERS),)),
+            "backbone": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, 3,)),
             "protein_name": spaces.Discrete(2),
             "step_to_end": spaces.Discrete(1),
+            "amino_acid": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, len(RESIDUE_LETTERS),)),
         })
         self.action_space = spaces.MultiDiscrete([3, len(ANGLE_MOVE)])
         # self.action_space = spaces.Box(low=-10, high=10, shape=(MAX_LENGTH,))
@@ -152,13 +153,14 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         phis = np.concatenate((phis, np.zeros(rest_zeros)))
         one_hot = np.zeros(MAX_LENGTH)
         one_hot[self.current_residue + 1] = 1
-        backbone_geometry = [np.concatenate(([psi, phi, one_hot], encoded)) for psi, phi, one_hot, encoded in
-                             zip(psis, phis, one_hot, self.encoded_residue_sequence)]
+        backbone_geometry = [[psi, phi, one] for psi, phi, one in
+                             zip(psis, phis, one_hot)]
         return {
             "backbone": backbone_geometry,
             # "energy": [self.difference_energy()],
             "protein_name": PROTEIN_LIST.index(self.name),
             "step_to_end": (256 - self.move_counter / 256),
+            "amino_acid": self.encoded_residue_sequence
         }
 
     def save_best_matches(self):

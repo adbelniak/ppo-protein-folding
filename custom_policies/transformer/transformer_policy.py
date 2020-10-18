@@ -8,12 +8,15 @@ from .transformer import Encoder
 
 class TransformerPolicy(ActorCriticPolicy):
     _encoder = None
+    _residue_encoder = None
 
     def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=True, layers=None,
                  net_arch=None,
                  act_fun=tf.nn.relu, feature_extraction="mlp", **kwargs):
         super(TransformerPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse)
         encoder = TransformerPolicy.get_common_police_network()
+        residue_encoder = TransformerPolicy.get_residue_encoder_networt()
+
 
         self._kwargs_check(feature_extraction, kwargs)
 
@@ -24,10 +27,13 @@ class TransformerPolicy(ActorCriticPolicy):
 
         with tf.variable_scope("model", reuse=reuse):
             transformer_encoded = encoder(self.processed_obs['backbone'], None)
+            transformer_amino = residue_encoder(self.processed_obs['amino_acid'], None)
 
             with_energy = tf.layers.flatten(transformer_encoded)
+            amino = tf.layers.flatten(transformer_amino)
+
             with_energy = tf.keras.layers.Concatenate()(
-                [with_energy, self.processed_obs['step_to_end']])
+                [with_energy, self.processed_obs['step_to_end'], amino])
             pi_latent, vf_latent = mlp_extractor(with_energy, net_arch, act_fun)
 
             self._value_fn = linear(vf_latent, 'vf', 1)
@@ -57,7 +63,7 @@ class TransformerPolicy(ActorCriticPolicy):
     @classmethod
     def get_common_police_network(cls):
         num_layers = 2
-        d_model = 3 + len(RESIDUE_LETTERS)
+        d_model = 3
         num_heads = 3
         dff = 128
         pe_input = 32
@@ -66,3 +72,17 @@ class TransformerPolicy(ActorCriticPolicy):
         if not cls._encoder:
             cls._encoder = Encoder(num_layers, d_model, num_heads, dff, pe_input, rate)
         return cls._encoder
+
+
+    @classmethod
+    def get_residue_encoder_networt(cls):
+        num_layers = 2
+        d_model = len(RESIDUE_LETTERS)
+        num_heads = 3
+        dff = 128
+        pe_input = 32
+        rate = 0.1
+
+        if not cls._residue_encoder:
+            cls._residue_encoder = Encoder(num_layers, d_model, num_heads, dff, pe_input, rate)
+        return cls._residue_encoder
