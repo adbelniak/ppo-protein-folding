@@ -48,7 +48,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.best_conformations_dict = {}
 
         self.observation_space = spaces.Dict({
-            "energy": spaces.Box(low=np.array([-np.inf]), high=np.array([np.inf]), dtype=np.float32),
+            # "energy": spaces.Box(low=np.array([-np.inf]), high=np.array([np.inf]), dtype=np.float32),
             "backbone": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, 3 + len(RESIDUE_LETTERS),)),
             "protein_name": spaces.Discrete(2),
             "step_to_end": spaces.Discrete(1),
@@ -156,7 +156,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
                              zip(psis, phis, one_hot, self.encoded_residue_sequence)]
         return {
             "backbone": backbone_geometry,
-            "energy": [self.difference_energy()],
+            # "energy": [self.difference_energy()],
             "protein_name": PROTEIN_LIST.index(self.name),
             "step_to_end": (256 - self.move_counter / 256),
         }
@@ -211,7 +211,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         ob = self._get_state()
 
         # reward = 0
-        energy = self.scorefxn(self.protein_pose)
+        # energy = self.scorefxn(self.protein_pose)
         distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
         # if self.prev_energy:
         #     reward += (self.prev_energy - energy) / self.start_energy
@@ -220,17 +220,17 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             if distance < self.start_distance * 0.5:
                 reward += 0.5
             self.best_distance = distance
-            self.best_energy = energy
+            # self.best_energy = energy
 
         self.prev_ca_rmsd = distance
-        self.prev_energy = energy
+        # self.prev_energy = energy
 
         if distance < self.start_distance * 0.1:
             # reward +=  self.start_distance - distance / self.start_distance
 
             self.done = True
 
-        if self.move_counter >= 1024:
+        if self.move_counter >= 512:
             # reward +=  self.start_distance - distance / self.start_distance
             self.done = True
 

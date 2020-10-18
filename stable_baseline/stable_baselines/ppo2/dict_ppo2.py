@@ -487,11 +487,11 @@ class DictRunner(AbstractDictEnvRunner):
                         if info["name"] in average_by_name.keys():
                             average_by_name[info["name"]].append(info["best"])
 
-
-            if len(average_by_name["1edp.pdb"]):
+            for key in average_by_name.keys():
+                if len(average_by_name[key]) > 0:
                     summary = tf.Summary(
-                        value=[tf.Summary.Value(tag="test/best_distancse", simple_value=np.mean(average_by_name["1edp.pdb"])),
-                               tf.Summary.Value(tag="test/best_distancse_2", simple_value=np.min(average_by_name["1edp.pdb"]))])
+                        value=[tf.Summary.Value(tag="test/{}".format(key), simple_value=np.mean(average_by_name[key])),
+                               tf.Summary.Value(tag="test/{}_min".format(key), simple_value=np.min(average_by_name[key]))])
                     self.writer.add_summary(summary, num_timesteps)
         return _write_best_distance
     def _run(self):
