@@ -171,6 +171,9 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
     def create_residue_mask(self, sequence):
         residues_mask = np.ones(len(sequence) - 2) * 1
+        print(self.name)
+        print(len(sequence))
+
         zero = np.zeros(MAX_LENGTH - len(sequence) + 1)
         return np.concatenate(([0], residues_mask, zero), )
 

@@ -14,7 +14,7 @@ RUN cd stable_baseline && \
 
 RUN pip3 install -e gym-rosetta
 
-RUN git clone https://github.com/harmslab/pdbtools.git && \
+RUN git clone https://github.com/adbelniak/pdbtools.git && \
     pip3 install -e pdbtools
 
 CMD /bin/bash

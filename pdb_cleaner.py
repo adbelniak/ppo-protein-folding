@@ -14,8 +14,9 @@ def clean_protein_files(dir: str, out_dir: str):
             g = open(os.path.join(dir, file), "w")
             g.writelines(pdb)
             g.close()
-        except:
+        except Exception as e:
+            print(e)
             pass
 
 if __name__ == '__main__':
-    clean_protein_files('protein_data/short', 'protein_data/short_modified')
+    clean_protein_files('protein_data/short', 'protein_data/short_valid')
