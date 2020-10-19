@@ -111,7 +111,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
                     self.current_residue += 1
                     if self.current_residue >= self.protein_pose.total_residue() - 1:
                         self.current_residue = 1
-                    return -0.1
+                    return -0.0
                 return 0.0
             else:
                 return -0.5
@@ -203,8 +203,9 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         torsion = action[0]
         if torsion < 2:
             current_angle_distance = self.get_residue_distance(torsion, self.current_residue)
-            reward += self.prev_residues_angle_distane[
-                          (self.current_residue + 1) * 2 + torsion] - current_angle_distance
+
+            # reward += self.prev_residues_angle_distane[
+            #               (self.current_residue + 1) * 2 + torsion] - current_angle_distance
             self.prev_residues_angle_distane[(self.current_residue + 1) * 2 + torsion] = current_angle_distance
         if not self.move_counter % 4:
             self.current_residue += 1
@@ -213,26 +214,28 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         ob = self._get_state()
 
         # reward = 0
-        # energy = self.scorefxn(self.protein_pose)
+        energy = self.scorefxn(self.protein_pose)
         distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
         # if self.prev_energy:
         #     reward += (self.prev_energy - energy) / self.start_energy
+        if self.prev_ca_rmsd:
+            reward += self.prev_ca_rmsd - distance
 
         if self.best_distance > distance:
             if distance < self.start_distance * 0.5:
                 reward += 0.5
             self.best_distance = distance
-            # self.best_energy = energy
+            self.best_energy = energy
 
         self.prev_ca_rmsd = distance
-        # self.prev_energy = energy
+        self.prev_energy = energy
 
         if distance < self.start_distance * 0.1:
             # reward +=  self.start_distance - distance / self.start_distance
 
             self.done = True
 
-        if self.move_counter >= 512:
+        if self.move_counter >= 128:
             # reward +=  self.start_distance - distance / self.start_distance
             self.done = True
 
