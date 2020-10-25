@@ -1,1 +1,1 @@
-1edp.pdb,5kk9.pdb,6f27.pdb,1l2y.pdb,1qgm.pdb
+1edp.pdb,5kk9.pdb,6f27.pdb,1l2y.pdb,1qgm.pdb,3fpo.pdb,3sgo.pdb

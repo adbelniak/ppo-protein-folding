@@ -11,10 +11,12 @@ import numpy as np
 # Custom MLP policy of three layers of size 128 each for the actor and 2 layers of 32 for the critic,
 # with a nature_cnn feature extractor
 class LstmCustomPolicy(ActorCriticPolicy):
+    _lstm = None
     def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=False, layers=None,
                  net_arch=None,
                  act_fun=tf.nn.relu, feature_extraction="mlp", **kwargs):
         super(LstmCustomPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse)
+        encoder = LstmCustomPolicy.get_residue_encoder_networt()
 
         # extracted_features = tf.keras.layers.Dense(128, activation='relu')(self.processed_obs)
         # extracted_features = tf.keras.layers.MaxPooling1D(pool_size=2)(extracted_features)
@@ -32,22 +34,13 @@ class LstmCustomPolicy(ActorCriticPolicy):
             net_arch = [dict(vf=layers, pi=layers)]
 
         with tf.variable_scope("model", reuse=reuse):
-            # x_image = tf.keras.layers.Reshape((-1, 3, 1))(self.processed_obs['residue_chain'])  # batch_size  x board_x x board_y x 1
-            activ = tf.nn.relu
 
-            # encoded_chain = tf.keras.layers.LSTM(16)(self.processed_obs["residue_chain"])
-            # x_image = tf.keras.layers.Reshape((64, 3, 1))(self.processed_obs['residue_chain'])  # batch_size  x board_x x board_y x 1
-            #
-            # embeded = tf.keras.layers.Conv2D(64,  kernel_size=3, padding='same', use_bias=False)(x_image)
-            # embeded = tf.keras.layers.MaxPool2D(pool_size=(2, 1), strides= (2, 1))(embeded)
-            # embeded = tf.keras.layers.Conv2D(64,  kernel_size=3, padding='same', use_bias=False)(embeded)
-            # embeded = tf.keras.layers.Conv2D(64,  kernel_size=3, padding='valid', use_bias=False)(embeded)
-
-            with_energy = tf.layers.flatten(self.processed_obs['backbone'])
+            transformer_encoded = encoder(self.processed_obs['backbone'], None)
+            # with_energy = tf.layers.flatten(self.processed_obs['backbone'])
 
             # with_energy = tf.keras.layers.Dense(64)(with_energy)
             with_energy = tf.keras.layers.Concatenate()(
-                [with_energy, self.processed_obs['protein_name'], self.processed_obs['residue_number'],
+                [transformer_encoded,
                  self.processed_obs['step_to_end']])
             pi_latent, vf_latent = mlp_extractor(with_energy, net_arch, act_fun)
 
@@ -76,3 +69,11 @@ class LstmCustomPolicy(ActorCriticPolicy):
     def value(self, obs, state=None, mask=None):
         feed_dict = {self.obs_ph[key]: obs[key] for key in obs.keys()}
         return self.sess.run(self.value_flat, feed_dict)
+
+    @classmethod
+    def get_residue_encoder_networt(cls):
+
+
+        if not cls._lstm:
+            cls._lstm = tf.keras.layers.LSTM(64)
+        return cls._lstm

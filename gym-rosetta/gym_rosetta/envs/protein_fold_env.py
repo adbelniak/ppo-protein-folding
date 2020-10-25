@@ -204,8 +204,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         if torsion < 2:
             current_angle_distance = self.get_residue_distance(torsion, self.current_residue)
 
-            # reward += self.prev_residues_angle_distane[
-            #               (self.current_residue + 1) * 2 + torsion] - current_angle_distance
+            reward += self.prev_residues_angle_distane[
+                          (self.current_residue + 1) * 2 + torsion] - current_angle_distance
             self.prev_residues_angle_distane[(self.current_residue + 1) * 2 + torsion] = current_angle_distance
         if not self.move_counter % 4:
             self.current_residue += 1
@@ -218,12 +218,14 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
         # if self.prev_energy:
         #     reward += (self.prev_energy - energy) / self.start_energy
-        if self.prev_ca_rmsd:
-            reward += self.prev_ca_rmsd - distance
+        # if self.prev_ca_rmsd:
+        #     reward += self.prev_ca_rmsd - distance
 
         if self.best_distance > distance:
-            if distance < self.start_distance * 0.5:
-                reward += 0.5
+            # if distance < self.start_distance * 0.5:
+            #     reward += 0.5
+            if self.prev_ca_rmsd:
+                reward += self.best_distance - distance
             self.best_distance = distance
             self.best_energy = energy
 
@@ -231,12 +233,11 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.prev_energy = energy
 
         if distance < self.start_distance * 0.1:
-            # reward +=  self.start_distance - distance / self.start_distance
-
+            reward +=  self.start_distance - distance / self.start_distance
             self.done = True
 
-        if self.move_counter >= 128:
-            # reward +=  self.start_distance - distance / self.start_distance
+        if self.move_counter >= 1024:
+            reward +=  self.start_distance - distance / self.start_distance
             self.done = True
 
         return [ob, reward, self.done, {"best": self.best_distance, "name": self.name}]
@@ -245,6 +246,12 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
     def get_new_pdb_file():
         dir = 'protein_data/short'
         return np.random.choice(os.listdir(dir))
+
+    def set_default_pose(self, protein_pose):
+        for i in range(1, protein_pose.total_residue() - 1):
+            protein_pose.set_phi(i, 180)
+            protein_pose.set_psi(i, 180)
+        return protein_pose
 
     def reset(self, **kwargs):
         dir = 'protein_data/short'
@@ -260,15 +267,15 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
         self.target_protein_pose = pose_from_pdb(os.path.join(dir, self.name))
         self.prev_residues_angle_distane = {}
-        self.protein_pose = pose_from_sequence(self.target_protein_pose.sequence())
+        self.protein_pose = self.set_default_pose(pose_from_pdb(os.path.join(dir, self.name)))
         for i in range(1, self.target_protein_pose.total_residue()):
             self.prev_residues_angle_distane[i * 2] = self.get_residue_distance(0, i)
             self.prev_residues_angle_distane[i * 2 + 1] = self.get_residue_distance(1, i)
 
-        if not self.shuffle:
-            self.protein_pose = pose_from_sequence(self.target_protein_pose.sequence())
-        else:
-            self.scramble_pose(self.protein_pose)
+        # if not self.shuffle:
+        #     self.protein_pose = pose_from_sequence(self.target_protein_pose.sequence())
+        # else:
+        #     self.scramble_pose(self.protein_pose)
         self.move_counter = 0
         self.reward = 0.0
         self.prev_ca_rmsd = None
@@ -276,6 +283,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.current_residue = 1
 
         self.best_distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
+        print(self.best_distance)
         self.start_distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
 
         self.best_energy = self.scorefxn(self.protein_pose)

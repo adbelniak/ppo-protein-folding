@@ -14,13 +14,13 @@ def run():
     init()
 
     seed = 2
-    env = make_rosetta_env("gym_rosetta:protein-fold-v0", 32, seed, use_subprocess=False)
+    env = make_rosetta_env("gym_rosetta:protein-fold-v0", 64, seed, use_subprocess=False)
     # env.shuffle = True
     # env = RossettaVecNormalize(env)
 
-    model = DictPPO2(TransformerPolicy, env, verbose=1, tensorboard_log='./log', n_steps=8, ent_coef=0.0001, noptepochs=5,
-                 nminibatches=8, full_tensorboard_log=False, learning_rate=1e-4, cliprange=0.01)
-    model.learn(total_timesteps=1000000)
+    model = DictPPO2(LstmCustomPolicy, env, verbose=1, tensorboard_log='./log', n_steps=64, ent_coef=0.0005, noptepochs=5,
+                 nminibatches=8, full_tensorboard_log=False, learning_rate=1e-4, cliprange=0.1)
+    model.learn(total_timesteps=2000000)
 
 if __name__ == '__main__':
     run()
