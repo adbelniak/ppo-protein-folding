@@ -11,7 +11,7 @@ from pyrosetta.teaching import *
 
 from pyrosetta.toolbox import cleanATOM
 
-ANGLE_MOVE = [-90, -45, -10, -5, -1, 0, 1, 5, 10, 45, 90]
+ANGLE_MOVE = [-90, -45, -10, -5, 1, -1, 5, 10, 45, 90]
 import logging
 
 logger = logging.getLogger(__name__)
@@ -49,12 +49,13 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
         self.observation_space = spaces.Dict({
             # "energy": spaces.Box(low=np.array([-np.inf]), high=np.array([np.inf]), dtype=np.float32),
-            "backbone": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, 3,)),
+            "backbone": spaces.Box(low=-3, high=3, shape=(MAX_LENGTH, 3,)),
             "protein_name": spaces.Discrete(2),
             "step_to_end": spaces.Discrete(1),
             "amino_acid": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, len(RESIDUE_LETTERS),)),
+            "current_distance": spaces.Box(low=-10, high=1, shape=(10,))
         })
-        self.action_space = spaces.MultiDiscrete([3, len(ANGLE_MOVE)])
+        self.action_space = spaces.MultiDiscrete([MAX_LENGTH, 2, len(ANGLE_MOVE)])
         # self.action_space = spaces.Box(low=-10, high=10, shape=(MAX_LENGTH,))
 
         # self.action_space = spaces.Dict({
@@ -97,9 +98,10 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
     def _move(self, action):
         if action is not None:
             self.move_counter += 1
-            residue_number = self.current_residue + 1
-            torsion_number = action[0]
-            move_pose_index = action[1]
+            # residue_number = self.current_residue + 1
+            residue_number = action[0] + 1
+            torsion_number = action[1]
+            move_pose_index = action[2]
             move_pose = ANGLE_MOVE[move_pose_index]
 
             if residue_number < self.protein_pose.total_residue():
@@ -155,12 +157,15 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         one_hot[self.current_residue + 1] = 1
         backbone_geometry = [[psi, phi, one] for psi, phi, one in
                              zip(psis, phis, one_hot)]
+        distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
+
         return {
             "backbone": backbone_geometry,
             # "energy": [self.difference_energy()],
             "protein_name": PROTEIN_LIST.index(self.name),
             "step_to_end": (256 - self.move_counter / 256),
-            "amino_acid": self.encoded_residue_sequence
+            "amino_acid": self.encoded_residue_sequence,
+            "current_distance": distance
         }
 
     def save_best_matches(self):
@@ -200,12 +205,12 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         penalty = self._move(action)
         # done = False
         reward = penalty
-        torsion = action[0]
+        torsion = action[1]
         if torsion < 2:
             current_angle_distance = self.get_residue_distance(torsion, self.current_residue)
 
-            reward += self.prev_residues_angle_distane[
-                          (self.current_residue + 1) * 2 + torsion] - current_angle_distance
+            # reward += self.prev_residues_angle_distane[
+            #               (self.current_residue + 1) * 2 + torsion] - current_angle_distance
             self.prev_residues_angle_distane[(self.current_residue + 1) * 2 + torsion] = current_angle_distance
         if not self.move_counter % 4:
             self.current_residue += 1
@@ -218,14 +223,13 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
         # if self.prev_energy:
         #     reward += (self.prev_energy - energy) / self.start_energy
-        # if self.prev_ca_rmsd:
-        #     reward += self.prev_ca_rmsd - distance
+        if self.prev_ca_rmsd:
+            reward += self.prev_ca_rmsd - distance
 
         if self.best_distance > distance:
             # if distance < self.start_distance * 0.5:
             #     reward += 0.5
-            if self.prev_ca_rmsd:
-                reward += self.best_distance - distance
+            reward += 100 * (self.best_distance - distance)
             self.best_distance = distance
             self.best_energy = energy
 
@@ -236,7 +240,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             reward +=  self.start_distance - distance / self.start_distance
             self.done = True
 
-        if self.move_counter >= 1024:
+        if self.move_counter >= 256:
             reward +=  self.start_distance - distance / self.start_distance
             self.done = True
 
@@ -283,7 +287,6 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.current_residue = 1
 
         self.best_distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
-        print(self.best_distance)
         self.start_distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
 
         self.best_energy = self.scorefxn(self.protein_pose)

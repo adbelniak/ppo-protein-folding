@@ -27,13 +27,13 @@ class TransformerPolicy(ActorCriticPolicy):
 
         with tf.variable_scope("model", reuse=reuse):
             transformer_encoded = encoder(self.processed_obs['backbone'], None)
-            transformer_amino = residue_encoder(self.processed_obs['amino_acid'], None)
+            # transformer_amino = residue_encoder(self.processed_obs['amino_acid'], None)
 
             with_energy = tf.layers.flatten(transformer_encoded)
-            amino = tf.layers.flatten(transformer_amino)
+            # amino = tf.layers.flatten(transformer_amino)
 
             with_energy = tf.keras.layers.Concatenate()(
-                [with_energy, self.processed_obs['step_to_end'], amino])
+                [with_energy, self.processed_obs['current_distance']])
             pi_latent, vf_latent = mlp_extractor(with_energy, net_arch, act_fun)
 
             self._value_fn = linear(vf_latent, 'vf', 1)
@@ -66,7 +66,7 @@ class TransformerPolicy(ActorCriticPolicy):
         d_model = 3
         num_heads = 3
         dff = 128
-        pe_input = 32
+        pe_input = 16
         rate = 0.1
 
         if not cls._encoder:
@@ -80,7 +80,7 @@ class TransformerPolicy(ActorCriticPolicy):
         d_model = len(RESIDUE_LETTERS)
         num_heads = 3
         dff = 128
-        pe_input = 32
+        pe_input = 16
         rate = 0.1
 
         if not cls._residue_encoder:
