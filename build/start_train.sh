@@ -1,6 +1,6 @@
 #/bin/bash
 
-docker run --name protein_training -d -it -v "$(pwd)"/protein_data:"$(pwd)"/protein_data -v logs/log:"$(pwd)"/log -p 5001:6006 ppo-protein
+docker run --name protein_training -d -it -v "$(pwd)"/protein_data:"$(pwd)"/protein_data -v log/log:"$(pwd)"/log -p 5001:6006 ppo-protein
 
 docker exec -i protein_training /bin/bash -c "python3  download_proteins.py && python3 pdb_cleaner.py"
 
