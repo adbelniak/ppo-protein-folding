@@ -27,13 +27,13 @@ class TransformerPolicy(ActorCriticPolicy):
 
         with tf.variable_scope("model", reuse=reuse):
             transformer_encoded = encoder(self.processed_obs['backbone'], None)
-            # transformer_amino = residue_encoder(self.processed_obs['amino_acid'], None)
-
+            transformer_amino = residue_encoder(self.processed_obs['amino_acid'], None)
+            # matmul_qk = tf.matmul(transformer_amino, transformer_encoded, transpose_a=True)
             with_energy = tf.layers.flatten(transformer_encoded)
-            # amino = tf.layers.flatten(transformer_amino)
+            amino = tf.layers.flatten(transformer_amino)
 
             with_energy = tf.keras.layers.Concatenate()(
-                [with_energy, self.processed_obs['current_distance']])
+                [with_energy, self.processed_obs['current_distance'], amino])
             pi_latent, vf_latent = mlp_extractor(with_energy, net_arch, act_fun)
 
             self._value_fn = linear(vf_latent, 'vf', 1)

@@ -2,9 +2,10 @@ import requests
 import os
 
 with open('protein_data/protein_list.txt') as f:
-    for pdb in f.readlines():
-        pdb = pdb.strip()
-        r = requests.get(pdb, allow_redirects=True)
-        file_name = pdb.split('/')[-1]
-        print("downloading pdb file:" + file_name)
-        open(os.path.join('protein_data', 'short', file_name.lower()), 'wb').write(r.content)
+    base_url = 'https://files.rcsb.org/download/'
+    for pdb in f.read().split(','):
+        protein_name = pdb + '.pdb'
+        url = base_url + protein_name
+        r = requests.get(url, allow_redirects=True)
+        print("downloading pdb file:" + protein_name)
+        open(os.path.join('protein_data', '6_length', protein_name.lower()), 'wb').write(r.content)

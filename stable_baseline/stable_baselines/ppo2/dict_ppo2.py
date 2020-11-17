@@ -449,6 +449,11 @@ class DictPPO2(ActorCriticRLModel):
 
         self._save_to_file(save_path, data=data, params=params_to_save, cloudpickle=cloudpickle)
 
+    def predict(self, observation, state=None, mask=None, deterministic=False):
+        feed_dict = {x: observation[key] for (i, x), key in zip(enumerate(self.act_model.obs_ph), observation.keys())}
+
+        return self.act_model.step(observation, state=None, mask=None, deterministic=deterministic)
+
 class DictRunner(AbstractDictEnvRunner):
     def __init__(self, *, env, model, n_steps, gamma, lam):
         """

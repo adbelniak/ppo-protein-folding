@@ -118,8 +118,7 @@ class SubprocVecEnv(VecEnv):
 
     def reset(self):
         for remote in self.remotes:
-            protein_name = ProteinFoldEnv.get_new_pdb_file()
-            remote.send(('reset', protein_name))
+            remote.send(('reset', ))
         obs = [remote.recv() for remote in self.remotes]
         return _flatten_obs(obs, self.observation_space)
 
