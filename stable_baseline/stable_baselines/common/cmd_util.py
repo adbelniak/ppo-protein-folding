@@ -14,6 +14,7 @@ from stable_baselines.common.atari_wrappers import make_atari, wrap_deepmind
 from stable_baselines.common.misc_util import mpi_rank_or_zero
 from stable_baselines.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines.common.vec_env.curriculum_dummy_vec_env import CurriculumDummyVecEnv
+from stable_baselines.common.vec_env.vec_curiosity_reward import CuriosityWrapper
 
 
 def make_vec_env(env_id, n_envs=1, seed=None, start_index=0,
@@ -189,7 +190,7 @@ def make_rosetta_env(env_id, num_env, seed, wrapper_kwargs=None,
 
     # When using one environment, no need to start subprocesses
     if num_env == 1 or not use_subprocess:
-        return CurriculumDummyVecEnv([make_env(i + start_index) for i in range(num_env)])
+        return CuriosityWrapper([make_env(i + start_index) for i in range(num_env)])
 
     return SubprocVecEnv([make_env(i + start_index) for i in range(num_env)],
                          start_method=start_method)

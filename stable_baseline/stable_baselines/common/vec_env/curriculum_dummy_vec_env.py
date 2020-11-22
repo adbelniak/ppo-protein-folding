@@ -3,7 +3,7 @@ from stable_baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 import os
 
 # LEVELS = [os.path.join('benchmark', x) for x in np.sort(os.listdir('protein_data/benchmark_incremental'))]
-LEVELS = ['benchmark_incremental']
+LEVELS = ['benchmark/bench_1']
 class CurriculumDummyVecEnv(DummyVecEnv):
     def __init__(self, env_fns):
         DummyVecEnv.__init__(self, env_fns)

@@ -262,3 +262,32 @@ class PrioritizedReplayBuffer(ReplayBuffer):
         self._it_min[idxes] = priorities ** self._alpha
 
         self._max_priority = max(self._max_priority, np.max(priorities))
+
+
+class DictionaryReplayBuffer(ReplayBuffer):
+    def _encode_sample(self, idxes: Union[List[int], np.ndarray], env: Optional[VecNormalize] = None):
+        actions, rewards, dones = [], [], []
+        obses_t, obses_tp1 = {}, {}
+        for i in idxes:
+            data = self._storage[i]
+            obs_t, action, reward, obs_tp1, done = data
+            for key in obs_t.keys():
+                if key in obses_t.keys():
+                    obses_t[key].append((obs_t[key]))
+                    obses_tp1[key].append((obs_tp1[key]))
+                else:
+                    obses_t[key] = [np.array(obs_t[key], copy=False)]
+                    obses_tp1[key] = [np.array(obs_tp1[key], copy=False)]
+
+            actions.append(np.array(action, copy=False))
+            rewards.append(reward)
+            dones.append(done)
+        return (obses_t,
+                np.array(actions),
+                self._normalize_reward(np.array(rewards), env),
+                obses_tp1,
+                np.array(dones))
+
+    def sample(self, batch_size: int, env: Optional[VecNormalize] = None, **_kwargs):
+        idxes = [random.randint(0, len(self._storage) - 1) for _ in range(batch_size)]
+        return self._encode_sample(idxes, env=env)

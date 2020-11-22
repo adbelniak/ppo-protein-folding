@@ -20,7 +20,7 @@ def run():
 
     model = DictPPO2(TransformerPolicy, env, verbose=1, tensorboard_log='./log', n_steps=32, ent_coef=0.001, noptepochs=5,
                  nminibatches=8, full_tensorboard_log=False, learning_rate=1e-4, cliprange=0.2, cliprange_vf=-1)
-    model.learn(total_timesteps=200000)
+    model.learn(total_timesteps=1000000)
     model.save('model')
     # model.load('model.zip')
 

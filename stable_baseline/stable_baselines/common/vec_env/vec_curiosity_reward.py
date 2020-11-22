@@ -1,0 +1,280 @@
+import logging
+
+import numpy as np
+import tensorflow as tf
+from stable_baselines.common import tf_util, tf_layers
+from stable_baselines.common.buffers import ReplayBuffer, DictionaryReplayBuffer
+from stable_baselines.common.input import observation_input
+from stable_baselines.common.running_mean_std import RunningMeanStd
+from stable_baselines.common.vec_env import VecEnvWrapper
+from stable_baselines.common.vec_env.util import obs_space_info
+
+from stable_baselines.common.vec_env.vec_tf_wrapper import BaseTFWrapper
+
+
+def small_convnet(x, activ = tf.nn.relu, **kwargs):
+    layer_1 = activ(tf_layers.conv(x, 'c1', n_filters=32, filter_size=8, stride=4, init_scale=np.sqrt(2), **kwargs))
+    layer_2 = activ(tf_layers.conv(layer_1, 'c2', n_filters=64, filter_size=4, stride=2, init_scale=np.sqrt(2), **kwargs))
+    layer_3 = activ(tf_layers.conv(layer_2, 'c3', n_filters=64, filter_size=3, stride=1, init_scale=np.sqrt(2), **kwargs))
+    layer_3 = tf_layers.conv_to_fc(layer_3)
+    return tf_layers.linear(layer_3, 'fc1', n_hidden=512, init_scale=np.sqrt(2))
+
+LEVELS = ['benchmark/bench_1']
+class CuriosityWrapper(BaseTFWrapper):
+    """
+    Random Network Distillation (RND) curiosity reward.
+    https://arxiv.org/abs/1810.12894
+
+    :param env: (gym.Env) Environment to wrap.
+    :param network: (str) Network type. Can be a "cnn" or a "mlp".
+    :param intrinsic_reward_weight: (float) Weight for the intrinsic reward.
+    :param buffer_size: (int) Size of the replay buffer for predictor training.
+    :param train_freq: (int) Frequency of predictor training in steps.
+    :param gradient_steps: (int) Number of optimization epochs.
+    :param batch_size: (int) Number of samples to draw from the replay buffer per optimization epoch.
+    :param learning_starts: (int) Number of steps to wait before training the predictor for the first time.
+    :param filter_end_of_episode: (bool) Weather or not to filter end of episode signals (dones).
+    :param filter_reward: (bool) Weather or not to filter extrinsic reward from the environment.
+    :param norm_obs: (bool) Weather or not to normalize and clip obs for the target/predictor network. Note that obs returned will be unaffected.
+    :param norm_ext_reward: (bool) Weather or not to normalize extrinsic reward.
+    :param gamma: (float) Reward discount factor for intrinsic reward normalization.
+    :param learning_rate: (float) Learning rate for the Adam optimizer of the predictor network.
+    """
+    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 1.0, buffer_size: int = 65536, train_freq: int = 16384, gradient_steps: int = 4,
+                 batch_size: int = 4096, learning_starts: int = 100, filter_end_of_episode: bool = True, filter_reward: bool = False, norm_obs: bool = True,
+                 norm_ext_reward: bool = False, gamma: float = 0.99, learning_rate: float = 0.0001, training: bool = True, _init_setup_model=True):
+
+        BaseTFWrapper.__init__(self, env_fns)
+
+        self.network_type = network
+        self.buffer = DictionaryReplayBuffer(buffer_size)
+        self.train_freq = train_freq
+        self.gradient_steps = gradient_steps
+        self.batch_size = batch_size
+        self.learning_starts = learning_starts
+        self.intrinsic_reward_weight = intrinsic_reward_weight
+        self.filter_end_of_episode = filter_end_of_episode
+        self.filter_extrinsic_reward = filter_reward
+        self.clip_obs = 5
+        self.norm_obs = norm_obs
+        self.norm_ext_reward = norm_ext_reward
+        self.gamma = gamma
+        self.learning_rate = learning_rate
+        self.training = training
+
+        self.epsilon = 1e-8
+        self.int_rwd_rms = RunningMeanStd(shape=(), epsilon=self.epsilon)
+        self.ext_rwd_rms = RunningMeanStd(shape=(), epsilon=self.epsilon)
+        self.obs_rms = RunningMeanStd(shape=self.observation_space.shape)
+        self.int_ret = np.zeros(self.num_envs) # discounted return for intrinsic reward
+        self.ext_ret = np.zeros(self.num_envs)  # discounted return for extrinsic reward
+        env = self.envs[0]
+        obs_space = env.observation_space
+        self.keys, shapes, dtypes = obs_space_info(obs_space)
+        self.obs_buff = {key: DictionaryReplayBuffer(buffer_size) for key in self.keys}
+        self.prev_obs_buff = {key: ReplayBuffer(buffer_size) for key in self.keys}
+
+        self.last_obs = None
+
+        self.updates = 0
+        self.steps = 0
+        #probably not important
+        self.last_action = None
+        #probably not important
+        self.last_obs = None
+        self.last_update = 0
+
+        self.graph = None
+        self.sess = None
+        self.observation_ph = None
+        self.processed_obs = None
+        self.predictor_network = None
+        self.target_network = None
+        self.params = None
+        self.int_reward = None
+        self.aux_loss = None
+        self.optimizer = None
+        self.training_op = None
+        self.level_generator = (x for x in LEVELS)
+
+        if _init_setup_model:
+            self.setup_model()
+
+    def _increase_level(self):
+        level_folder = next(self.level_generator)
+        for env_idx in range(self.num_envs):
+            self.envs[env_idx].set_level(level_folder)
+        self.average_progress = []
+
+    def setup_model(self):
+        self.graph = tf.Graph()
+        env = self.envs[0]
+        obs_space = env.observation_space
+        with self.graph.as_default():
+            self.sess = tf_util.make_session(num_cpu=None, graph=self.graph)
+            self.observation_ph, self.processed_obs = observation_input(obs_space, scale=(self.network_type == "cnn"))
+
+            with tf.variable_scope("target_model"):
+                if self.network_type == 'cnn':
+                    self.target_network = small_convnet(self.processed_obs, tf.nn.leaky_relu)
+                elif self.network_type == 'mlp':
+                    flattened = tf.layers.flatten(tf.keras.layers.Concatenate()([self.processed_obs['backbone'], self.processed_obs['amino_acid']]))
+                    # flattened = tf.layers.flatten(self.processed_obs['backbone'])
+
+                    self.target_network = tf_layers.mlp(flattened, [128, 64])
+                    self.target_network = tf_layers.linear(self.target_network, "out", 32)
+                else:
+                    raise ValueError("Unknown network type {}!".format(self.network_type))
+
+            with tf.variable_scope("predictor_model"):
+                if self.network_type == 'cnn':
+                    self.predictor_network = tf.nn.relu(small_convnet(self.processed_obs, tf.nn.leaky_relu))
+                elif self.network_type == 'mlp':
+                    flattened = tf.layers.flatten(tf.keras.layers.Concatenate()([self.processed_obs['backbone'], self.processed_obs['amino_acid']]))
+                    # flattened = tf.layers.flatten(self.processed_obs['backbone'])
+                    self.predictor_network = tf_layers.mlp(flattened, [128, 64])
+
+                self.predictor_network = tf.nn.relu(tf_layers.linear(self.predictor_network, "pred_fc1", 64))
+                self.predictor_network = tf_layers.linear(self.predictor_network, "out", 32)
+
+            with tf.name_scope("loss"):
+                self.int_reward = tf.reduce_mean(tf.square(tf.stop_gradient(self.target_network) - self.predictor_network), axis=1)
+                self.aux_loss = tf.reduce_mean(tf.square(tf.stop_gradient(self.target_network) - self.predictor_network))
+
+            with tf.name_scope("train"):
+                self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
+                self.training_op = self.optimizer.minimize(self.aux_loss)
+
+            self.params = tf.trainable_variables()
+            tf.global_variables_initializer().run(session=self.sess)
+
+    def reset(self):
+        self._increase_level()
+        batch_obs = []
+        for env_idx in range(self.num_envs):
+            obs = self.envs[env_idx].reset()
+            self._save_obs(env_idx, obs)
+            batch_obs.append(obs)
+        self.last_obs = batch_obs
+        return self._obs_from_buf()
+
+    def step_async(self, actions):
+        super().step_async(actions)
+        self.last_action = actions
+        self.steps += self.num_envs
+
+    def step_wait(self):
+        self.last_action = self.actions
+        batch_obs = []
+        for env_idx in range(self.num_envs):
+            obs, self.buf_rews[env_idx], self.buf_dones[env_idx], info = \
+                self.envs[env_idx].step(self.actions[env_idx])
+            if self.buf_dones[env_idx]:
+                self.buf_infos[env_idx]['terminal_observation'] = obs
+
+                obs = self.envs[env_idx].reset()
+            self._save_obs(env_idx, obs)
+            self.buf_infos[env_idx] = info
+            batch_obs.append(obs)
+            # for key in self.keys:
+            #     self.obs_buff[key].add(obs[key])
+            #     self.prev_obs_buff[key].add(self.last_obs[env_idx][key])
+            self.buffer.add(self.last_obs[env_idx], self.last_action[env_idx], self.buf_rews[env_idx], obs, self.buf_dones[env_idx])
+        self.last_obs = batch_obs
+
+        obs = self._obs_from_buf()
+        if self.filter_extrinsic_reward:
+            rews = np.zeros(self.buf_rews)
+        # if self.filter_end_of_episode:
+        #     dones = np.zeros(self.buf_dones)
+
+        # if self.training:
+        #     self.obs_rms.update(obs)
+
+        # obs_n = self.normalize_obs(obs)
+        obs_n = obs
+        obs_inp = {}
+
+        loss = self.sess.run([self.int_reward], {self.observation_ph[k]: obs[k] for k in obs.keys()})
+
+        if self.training:
+            self._update_ext_reward_rms(self.buf_rews)
+            self._update_int_reward_rms(loss)
+
+        intrinsic_reward = np.array(loss) / np.sqrt(self.int_rwd_rms.var + self.epsilon)
+        if self.norm_ext_reward:
+            extrinsic_reward = np.array(self.buf_rews) / np.sqrt(self.ext_rwd_rms.var + self.epsilon)
+        else:
+            extrinsic_reward = self.buf_rews
+        reward = np.squeeze(extrinsic_reward + self.intrinsic_reward_weight * intrinsic_reward)
+        print("Reward {} vs intrinsic reward: {} extr rewar: {}".format(np.max(reward), np.max(intrinsic_reward), np.max(extrinsic_reward)))
+        if self.training and self.steps > self.learning_starts and self.steps - self.last_update > self.train_freq:
+            self.updates += 1
+            self.last_update = self.steps
+            self.learn()
+
+        return obs, reward, np.copy(self.buf_dones), self.buf_infos.copy()
+
+
+    def close(self):
+        VecEnvWrapper.close(self)
+
+    def learn(self):
+        total_loss = 0
+        for _ in range(self.gradient_steps):
+            obs_batch, act_batch, rews_batch, next_obs_batch, done_mask = self.buffer.sample(self.batch_size)
+            # obs_batch = self.normalize_obs(obs_batch)
+            test = self.sess.run(self.aux_loss, {self.observation_ph[k]: obs_batch[k] for k in obs_batch.keys()})
+            train, loss = self.sess.run([self.training_op, self.aux_loss], {self.observation_ph[k]: obs_batch[k] for k in obs_batch.keys()})
+            total_loss += loss
+        print("Trained predictor. Avg loss: {}".format(total_loss / self.gradient_steps))
+
+    def _update_int_reward_rms(self, reward: np.ndarray) -> None:
+        """Update reward normalization statistics."""
+        self.int_ret = self.gamma * self.int_ret + reward
+        self.int_rwd_rms.update(self.int_ret)
+
+    def _update_ext_reward_rms(self, reward: np.ndarray) -> None:
+        """Update reward normalization statistics."""
+        self.ext_ret = self.gamma * self.ext_ret + reward
+        self.ext_rwd_rms.update(self.ext_ret)
+
+    def normalize_obs(self, obs: np.ndarray) -> np.ndarray:
+        """
+        Normalize observations using observations statistics.
+        Calling this method does not update statistics.
+        """
+        if self.norm_obs:
+            obs = np.clip((obs - self.obs_rms.mean) / np.sqrt(self.obs_rms.var + self.epsilon),
+                          -self.clip_obs,
+                          self.clip_obs)
+        return obs
+
+    def get_parameter_list(self):
+        return self.params
+
+    def save(self, save_path):
+        #os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        #self.saver.save(self.sess, save_path)
+
+        data = {
+            'network': self.network_type,
+            'intrinsic_reward_weight': self.intrinsic_reward_weight,
+            'buffer_size': self.buffer.buffer_size,
+            'train_freq': self.train_freq,
+            'gradient_steps': self.gradient_steps,
+            'batch_size': self.batch_size,
+            'learning_starts': self.learning_starts,
+            'filter_end_of_episode': self.filter_end_of_episode,
+            'filter_extrinsic_reward': self.filter_extrinsic_reward,
+            'norm_obs': self.norm_obs,
+            'norm_ext_reward': self.norm_ext_reward,
+            'gamma': self.gamma,
+            'learning_rate': self.learning_rate,
+            'int_rwd_rms': self.int_rwd_rms,
+            'ext_rwd_rms': self.ext_rwd_rms,
+            'obs_rms': self.obs_rms
+        }
+
+        params_to_save = self.get_parameters()
+        self._save_to_file_zip(save_path, data=data, params=params_to_save)
