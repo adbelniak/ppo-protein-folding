@@ -19,7 +19,7 @@ def small_convnet(x, activ = tf.nn.relu, **kwargs):
     layer_3 = tf_layers.conv_to_fc(layer_3)
     return tf_layers.linear(layer_3, 'fc1', n_hidden=512, init_scale=np.sqrt(2))
 
-LEVELS = ['benchmark/bench_1']
+LEVELS = ['benchmark_incremental']
 class CuriosityWrapper(BaseTFWrapper):
     """
     Random Network Distillation (RND) curiosity reward.
@@ -40,7 +40,7 @@ class CuriosityWrapper(BaseTFWrapper):
     :param gamma: (float) Reward discount factor for intrinsic reward normalization.
     :param learning_rate: (float) Learning rate for the Adam optimizer of the predictor network.
     """
-    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 1.0, buffer_size: int = 65536, train_freq: int = 16384, gradient_steps: int = 4,
+    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 0.1, buffer_size: int = 65536, train_freq: int = 16384, gradient_steps: int = 4,
                  batch_size: int = 4096, learning_starts: int = 100, filter_end_of_episode: bool = True, filter_reward: bool = False, norm_obs: bool = True,
                  norm_ext_reward: bool = False, gamma: float = 0.99, learning_rate: float = 0.0001, training: bool = True, _init_setup_model=True):
 
@@ -65,14 +65,13 @@ class CuriosityWrapper(BaseTFWrapper):
         self.epsilon = 1e-8
         self.int_rwd_rms = RunningMeanStd(shape=(), epsilon=self.epsilon)
         self.ext_rwd_rms = RunningMeanStd(shape=(), epsilon=self.epsilon)
-        self.obs_rms = RunningMeanStd(shape=self.observation_space.shape)
         self.int_ret = np.zeros(self.num_envs) # discounted return for intrinsic reward
         self.ext_ret = np.zeros(self.num_envs)  # discounted return for extrinsic reward
         env = self.envs[0]
         obs_space = env.observation_space
         self.keys, shapes, dtypes = obs_space_info(obs_space)
         self.obs_buff = {key: DictionaryReplayBuffer(buffer_size) for key in self.keys}
-        self.prev_obs_buff = {key: ReplayBuffer(buffer_size) for key in self.keys}
+        self.obs_rms = {key: RunningMeanStd(shape=obs_space[key].shape, epsilon=self.epsilon) for key in self.keys}
 
         self.last_obs = None
 
@@ -186,28 +185,26 @@ class CuriosityWrapper(BaseTFWrapper):
         if self.filter_extrinsic_reward:
             rews = np.zeros(self.buf_rews)
         # if self.filter_end_of_episode:
-        #     dones = np.zeros(self.buf_dones)
-
-        # if self.training:
-        #     self.obs_rms.update(obs)
-
-        # obs_n = self.normalize_obs(obs)
-        obs_n = obs
-        obs_inp = {}
-
-        loss = self.sess.run([self.int_reward], {self.observation_ph[k]: obs[k] for k in obs.keys()})
+        #     dones = np.zeros(len(self.buf_dones))
 
         if self.training:
-            self._update_ext_reward_rms(self.buf_rews)
+            for key in self.obs_rms.keys():
+                self.obs_rms[key].update(obs[key])
+
+        obs_n = {key: self.normalize_obs(obs[key], key) for key in obs.keys()}
+        loss = self.sess.run([self.int_reward], {self.observation_ph[k]: obs_n[k] for k in obs_n.keys()})
+
+        if self.training:
+            self._update_ext_reward_rms(np.copy(self.buf_rews))
             self._update_int_reward_rms(loss)
 
         intrinsic_reward = np.array(loss) / np.sqrt(self.int_rwd_rms.var + self.epsilon)
         if self.norm_ext_reward:
-            extrinsic_reward = np.array(self.buf_rews) / np.sqrt(self.ext_rwd_rms.var + self.epsilon)
+            extrinsic_reward = np.copy(self.buf_rews) / np.sqrt(self.ext_rwd_rms.var + self.epsilon)
         else:
-            extrinsic_reward = self.buf_rews
+            extrinsic_reward = np.copy(self.buf_rews)
         reward = np.squeeze(extrinsic_reward + self.intrinsic_reward_weight * intrinsic_reward)
-        print("Reward {} vs intrinsic reward: {} extr rewar: {}".format(np.max(reward), np.max(intrinsic_reward), np.max(extrinsic_reward)))
+        print("Reward {} vs intrinsic reward: {} extr rewar: {}, mean intr: {}".format(np.max(reward), np.max(intrinsic_reward), np.max(extrinsic_reward), np.mean(intrinsic_reward)))
         if self.training and self.steps > self.learning_starts and self.steps - self.last_update > self.train_freq:
             self.updates += 1
             self.last_update = self.steps
@@ -223,7 +220,8 @@ class CuriosityWrapper(BaseTFWrapper):
         total_loss = 0
         for _ in range(self.gradient_steps):
             obs_batch, act_batch, rews_batch, next_obs_batch, done_mask = self.buffer.sample(self.batch_size)
-            # obs_batch = self.normalize_obs(obs_batch)
+            for key in obs_batch.keys():
+                obs_batch[key] = self.normalize_obs(obs_batch[key], key)
             test = self.sess.run(self.aux_loss, {self.observation_ph[k]: obs_batch[k] for k in obs_batch.keys()})
             train, loss = self.sess.run([self.training_op, self.aux_loss], {self.observation_ph[k]: obs_batch[k] for k in obs_batch.keys()})
             total_loss += loss
@@ -239,13 +237,13 @@ class CuriosityWrapper(BaseTFWrapper):
         self.ext_ret = self.gamma * self.ext_ret + reward
         self.ext_rwd_rms.update(self.ext_ret)
 
-    def normalize_obs(self, obs: np.ndarray) -> np.ndarray:
+    def normalize_obs(self, obs: np.ndarray, key: str) -> np.ndarray:
         """
         Normalize observations using observations statistics.
         Calling this method does not update statistics.
         """
         if self.norm_obs:
-            obs = np.clip((obs - self.obs_rms.mean) / np.sqrt(self.obs_rms.var + self.epsilon),
+            obs = np.clip((obs - self.obs_rms[key].mean) / np.sqrt(self.obs_rms[key].var + self.epsilon),
                           -self.clip_obs,
                           self.clip_obs)
         return obs

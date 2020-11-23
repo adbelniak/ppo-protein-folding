@@ -222,16 +222,16 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         if self.best_distance > distance:
             # if distance < self.start_distance * 0.5:
             #     reward += 0.5
-            reward += (self.best_distance - distance) / self.start_distance
+            reward += 0.5 * (self.best_distance - distance) / self.start_distance
             self.best_distance = distance
             self.best_energy = energy
 
         self.prev_ca_rmsd = distance
         self.prev_energy = energy
 
-        if distance < self.start_distance * 0.2:
+        if distance < self.start_distance * 0.4:
             # reward +=  self.start_distance - distance / self.start_distance
-            reward += 1
+            reward += 2
             self.done = True
 
         if self.move_counter >= 64:
