@@ -2,8 +2,8 @@ import numpy as np
 from stable_baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 import os
 
-# LEVELS = [os.path.join('benchmark', x) for x in np.sort(os.listdir('protein_data/benchmark_incremental'))]
-LEVELS = ['benchmark_incremental']
+LEVELS = [os.path.join('benchmark', x) for x in np.sort(os.listdir('protein_data/benchmark'))]
+# LEVELS = ['benchmark/bench_1']
 class CurriculumDummyVecEnv(DummyVecEnv):
     def __init__(self, env_fns):
         DummyVecEnv.__init__(self, env_fns)
@@ -27,10 +27,13 @@ class CurriculumDummyVecEnv(DummyVecEnv):
 
     def reset(self):
         self._increase_level()
+        masks = []
         for env_idx in range(self.num_envs):
-            obs = self.envs[env_idx].reset()
+            obs, mask = self.envs[env_idx].reset()
+            masks.append(mask)
+
             self._save_obs(env_idx, obs)
-        return self._obs_from_buf()
+        return self._obs_from_buf(), masks
 
     def step_wait(self):
         for env_idx in range(self.num_envs):
@@ -40,10 +43,11 @@ class CurriculumDummyVecEnv(DummyVecEnv):
                 self._append_distance_result(info["best"], info["start"])
                 # save final observation where user can get it, then reset
                 self.buf_infos[env_idx]['terminal_observation'] = obs
-                # if len(self.average_progress) == self.probes_to_account and np.mean(self.average_progress) < 0.3:
-                #     print("Next Level")
-                #     self._increase_level()
-                obs = self.envs[env_idx].reset()
+                if len(self.average_progress) == self.probes_to_account and np.mean(self.average_progress) < 0.3:
+                    print("Next Level")
+                    self._increase_level()
+                obs, mask = self.envs[env_idx].reset()
+                self.buf_infos[env_idx]["action_mask"] = mask
             self._save_obs(env_idx, obs)
             self.buf_infos[env_idx] = info
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones),

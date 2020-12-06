@@ -18,8 +18,8 @@ def run():
     # env.shuffle = True
     # env = RossettaVecNormalize(env)
 
-    model = DictPPO2(TransformerPolicy, env, verbose=1, tensorboard_log='./log', n_steps=32, ent_coef=0.001, noptepochs=5,
-                 nminibatches=8, full_tensorboard_log=False, learning_rate=1e-4, cliprange=0.2, cliprange_vf=-1)
+    model = DictPPO2(TransformerPolicy, env, verbose=1, tensorboard_log='./log', n_steps=8, ent_coef=0.001, noptepochs=5,
+                 nminibatches=8, full_tensorboard_log=False, learning_rate=1e-4, cliprange=0.2, cliprange_vf=-1, with_action_mask=True)
     model.learn(total_timesteps=1000000)
     model.save('model')
     # model.load('model.zip')

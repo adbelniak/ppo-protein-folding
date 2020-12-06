@@ -65,3 +65,19 @@ def flatten_lists(listoflists):
     :return: (list)
     """
     return [el for list_ in listoflists for el in list_]
+
+def flatten_action_mask(action_space, env_action_mask):
+    """
+    Return action mask after flattening.
+    :return: (list or None)
+    """
+    if isinstance(action_space, gym.spaces.MultiDiscrete) and env_action_mask is not None:
+        return np.concatenate(env_action_mask)
+    elif isinstance(action_space, gym.spaces.MultiDiscrete):
+        return np.ones(sum(action_space.nvec))
+    elif isinstance(action_space, gym.spaces.Discrete) and env_action_mask is not None:
+        return env_action_mask
+    elif isinstance(action_space, gym.spaces.Discrete):
+        return np.ones(action_space.n)
+
+    return None

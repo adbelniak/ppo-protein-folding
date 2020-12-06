@@ -3,7 +3,7 @@ import collections
 import functools
 import multiprocessing
 from typing import Set
-
+from tensorflow.python import debug as tf_debug
 import numpy as np
 import tensorflow as tf
 
@@ -197,7 +197,12 @@ def make_session(num_cpu=None, make_default=False, graph=None):
     if make_default:
         return tf.InteractiveSession(config=tf_config, graph=graph)
     else:
-        return tf.Session(config=tf_config, graph=graph)
+        from tensorflow.python import debug as tf_debug
+        sess=  tf.InteractiveSession(config=tf_config, graph=graph)
+        # sess = tf_debug.TensorBoardDebugWrapperSession(sess, "localhost:6007")
+
+        # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+        return sess
 
 
 def single_threaded_session(make_default=False, graph=None):

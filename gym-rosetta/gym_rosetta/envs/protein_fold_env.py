@@ -8,9 +8,6 @@ from pyrosetta.rosetta.core.scoring import CA_rmsd
 import numpy as np
 from angles import normalize
 from pyrosetta.teaching import *
-from shutil import copyfile
-
-from pyrosetta.toolbox import cleanATOM
 
 ANGLE_MOVE = [-90, -45, -10, -5, 5, 10, 45, 90]
 import logging
@@ -70,6 +67,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.prev_energy = None
         self.start_energy = 10000
         self.level_dir = 'protein_data/short_3'
+        self.offset = 0
 
     def _configure_environment(self):
         """
@@ -170,10 +168,10 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
                 json.dump(self.best_conformations_dict, fp)
 
     def create_residue_mask(self, sequence):
-        residues_mask = np.ones(len(sequence) - 2) * 1
-
+        residues_mask = np.zeros(len(sequence) - 2) * 1
+        residues_mask[2] = 1
         zero = np.zeros(MAX_LENGTH - len(sequence) + 1)
-        return np.concatenate(([0], residues_mask, zero), )
+        return np.concatenate((residues_mask, [0], zero), )
 
     def write_best_conformation(self, distance):
         if self.name not in self.best_conformations_dict.keys():
@@ -192,6 +190,11 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             target = self.target_protein_pose.psi(residue_number)
         angle_distance = self._get_residue_metric(np.radians(current), np.radians(target))
         return angle_distance / np.pi
+
+    def _get_action_mask(self):
+        mask = np.zeros(MAX_LENGTH - self.protein_pose.total_residue() - 1)
+        residue_mask = np.concatenate((np.ones(self.protein_pose.total_residue() + 1), mask))
+        return np.array([residue_mask, np.array([1, 1]), np.ones(len(ANGLE_MOVE))])
 
     def step(self, action):
         self.done = False
@@ -216,29 +219,30 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
         # if self.prev_energy:
         #     reward += (self.prev_energy - energy) / self.start_energy
-        # if self.prev_ca_rmsd:
-        #     reward += 0.1 * (self.prev_ca_rmsd - distance) / self.start_distance
+        if self.prev_ca_rmsd:
+            reward += 0.1 * (self.prev_ca_rmsd - distance) / self.start_distance
 
         if self.best_distance > distance:
             # if distance < self.start_distance * 0.5:
             #     reward += 0.5
-            reward += 0.5 * (self.best_distance - distance) / self.start_distance
+            reward += (self.best_distance - distance) / self.start_distance
             self.best_distance = distance
             self.best_energy = energy
 
         self.prev_ca_rmsd = distance
         self.prev_energy = energy
 
-        if distance < self.start_distance * 0.4:
+        if distance < self.start_distance * 0.2:
             # reward +=  self.start_distance - distance / self.start_distance
-            reward += 2
+            reward += 4
             self.done = True
 
         if self.move_counter >= 64:
             # reward -= distance / self.start_distance
             self.done = True
-
-        return [ob, reward, self.done, {"best": self.best_distance, "name": self.name, "start": self.start_distance}]
+        mask = self._get_action_mask()
+        return [ob, reward, self.done,
+                {"best": self.best_distance, "name": self.name, "start": self.start_distance, 'action_mask': mask}]
 
     def set_default_pose(self, protein_pose):
         for i in range(1, protein_pose.total_residue()):
@@ -253,7 +257,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
     def reset(self):
         try:
             dir = self.level_dir
-
+            self.offset = np.random.randint(0, 10)
             protein_name = np.random.choice(os.listdir(dir))
             if self.start_distance > self.best_distance:
                 self.write_best_conformation(self.best_distance)
@@ -287,7 +291,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             self.encoded_residue_sequence = self._encode_residues(self.target_protein_pose.sequence())
             self.save_best_matches()
             self.epoch_counter += 1
-            return self._get_state()
+            mask = self._get_action_mask()
+            return self._get_state(), mask
         except:
             print(self.name)
 
@@ -313,7 +318,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         np.random.seed(seed)
 
     def set_level(self, level_sub_dir):
-        self.level_dir = os.path.join('protein_data',level_sub_dir)
+        self.level_dir = os.path.join('protein_data', level_sub_dir)
 
 
 if __name__ == '__main__':

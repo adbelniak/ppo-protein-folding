@@ -180,6 +180,11 @@ class CategoricalProbabilityDistributionType(ProbabilityDistributionType):
     def sample_dtype(self):
         return tf.int64
 
+class CategoricalProbabilityDistributionWithMaskType(ProbabilityDistributionType):
+    def __init__(self, n_cat):
+        super(CategoricalProbabilityDistributionWithMaskType, self).__init__(n_cat)
+    def probability_distribution_class(self):
+        return CategoricalProbabilityDistributionWithMask
 
 class MultiCategoricalProbabilityDistributionType(ProbabilityDistributionType):
     def __init__(self, n_vec):
@@ -213,6 +218,15 @@ class MultiCategoricalProbabilityDistributionType(ProbabilityDistributionType):
     def sample_dtype(self):
         return tf.int64
 
+class MultiCategoricalProbabilityDistributionWithMaskType(MultiCategoricalProbabilityDistributionType):
+    def __init__(self, n_cat):
+        super(MultiCategoricalProbabilityDistributionWithMaskType, self).__init__(n_cat)
+
+    def probability_distribution_class(self):
+        return MultiCategoricalProbabilityDistributionWithMask
+
+    def proba_distribution_from_flat(self, flat):
+        return MultiCategoricalProbabilityDistributionWithMask(self.n_vec, flat)
 
 class DiagGaussianProbabilityDistributionType(ProbabilityDistributionType):
     def __init__(self, size):
@@ -299,6 +313,7 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
         # Note: we can't use sparse_softmax_cross_entropy_with_logits because
         #       the implementation does not allow second-order derivatives...
         one_hot_actions = tf.one_hot(x, self.logits.get_shape().as_list()[-1])
+
         return tf.nn.softmax_cross_entropy_with_logits_v2(
             logits=self.logits,
             labels=tf.stop_gradient(one_hot_actions))
@@ -336,6 +351,43 @@ class CategoricalProbabilityDistribution(ProbabilityDistribution):
         """
         return cls(flat)
 
+
+class CategoricalProbabilityDistributionWithMask(CategoricalProbabilityDistribution):
+    def __init__(self, logits, action_mask=None):
+        """
+        Probability distributions from categorical input
+        :param logits: ([float]) the categorical logits input
+        """
+        if action_mask is None:
+            no_mask = tf.ones_like(self.logits)
+            self._action_mask_ph = tf.placeholder_with_default(no_mask, shape=self.logits.shape, name="action_ph")
+            super(CategoricalProbabilityDistributionWithMask, self).__init__(logits)
+        else:
+            self._action_mask_ph = action_mask
+            mask = self.get_action_mask_tf()
+            negative_inf_vector = tf.ones_like(self._action_mask_ph, dtype=tf.float32) * -1e+5
+            logits_with_mask = tf.where_v2(tf.cast(self._action_mask_ph, dtype=tf.bool), logits, negative_inf_vector)
+
+            super(CategoricalProbabilityDistributionWithMask, self).__init__(logits_with_mask)
+
+    @property
+    def action_mask_ph(self):
+        return self._action_mask_ph
+
+    def get_action_mask_tf(self):
+        negative_inf_vector = tf.ones_like(self._action_mask_ph, dtype=tf.float32) * -10e3
+        zero_vector = tf.zeros_like(self._action_mask_ph, dtype=tf.float32)
+        _action_mask_ph = tf.where(tf.cast(self._action_mask_ph, dtype=tf.bool), zero_vector, negative_inf_vector)
+        return _action_mask_ph
+
+    def entropy(self):
+        logits = tf.multiply(self.logits, self.action_mask_ph)
+        a_0 = logits - tf.reduce_max(logits, axis=-1, keepdims=True)
+        exp_a_0 = tf.exp(a_0)
+        exp_a_0 = tf.multiply(exp_a_0, self.action_mask_ph)
+        z_0 = tf.reduce_sum(exp_a_0, axis=-1, keepdims=True)
+        p_0 = exp_a_0 / z_0
+        return tf.reduce_sum(p_0 * (tf.log(z_0) - a_0), axis=-1)
 
 class MultiCategoricalProbabilityDistribution(ProbabilityDistribution):
     def __init__(self, nvec, flat):
@@ -376,6 +428,25 @@ class MultiCategoricalProbabilityDistribution(ProbabilityDistribution):
         :return: (ProbabilityDistribution) the instance from the given multi categorical input
         """
         raise NotImplementedError
+
+class MultiCategoricalProbabilityDistributionWithMask(MultiCategoricalProbabilityDistribution):
+    def __init__(self, nvec, flat):
+        """
+        Probability distributions from categorical input
+        :param logits: ([float]) the categorical logits input
+        """
+        super(MultiCategoricalProbabilityDistributionWithMask, self).__init__(nvec, flat)
+
+        self.flat = flat
+        no_mask = tf.ones_like(self.flat)
+        self._action_mask_ph = tf.placeholder_with_default(no_mask, shape=self.flat.shape, name="action_ph")
+        self.categoricals = list(map(CategoricalProbabilityDistributionWithMask, tf.split(flat, nvec, axis=-1), tf.split(self._action_mask_ph, nvec, axis=-1)))
+        # super(MultiCategoricalProbabilityDistributionWithMask, self).__init__(nvec, flat)
+
+    @property
+    def action_mask_ph(self):
+        return self._action_mask_ph
+
 
 
 class DiagGaussianProbabilityDistribution(ProbabilityDistribution):
@@ -476,7 +547,7 @@ class BernoulliProbabilityDistribution(ProbabilityDistribution):
         return cls(flat)
 
 
-def make_proba_dist_type(ac_space):
+def make_proba_dist_type(ac_space, with_action_mask=False):
     """
     return an instance of ProbabilityDistributionType for the correct type of action space
 
@@ -486,8 +557,12 @@ def make_proba_dist_type(ac_space):
     if isinstance(ac_space, spaces.Box):
         assert len(ac_space.shape) == 1, "Error: the action space must be a vector"
         return DiagGaussianProbabilityDistributionType(ac_space.shape[0])
+    elif isinstance(ac_space, spaces.Discrete) and with_action_mask:
+        return CategoricalProbabilityDistributionWithMaskType(ac_space.n)
     elif isinstance(ac_space, spaces.Discrete):
         return CategoricalProbabilityDistributionType(ac_space.n)
+    elif isinstance(ac_space, spaces.MultiDiscrete) and with_action_mask:
+        return MultiCategoricalProbabilityDistributionWithMaskType(ac_space.nvec)
     elif isinstance(ac_space, spaces.MultiDiscrete):
         return MultiCategoricalProbabilityDistributionType(ac_space.nvec)
     elif isinstance(ac_space, spaces.MultiBinary):

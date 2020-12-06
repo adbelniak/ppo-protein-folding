@@ -9,7 +9,8 @@ from gym.spaces import Discrete
 from stable_baselines.common.tf_util import batch_to_seq, seq_to_batch
 from stable_baselines.common.tf_layers import conv, linear, conv_to_fc, lstm
 from stable_baselines.common.distributions import make_proba_dist_type, CategoricalProbabilityDistribution, \
-    MultiCategoricalProbabilityDistribution, DiagGaussianProbabilityDistribution, BernoulliProbabilityDistribution
+    MultiCategoricalProbabilityDistribution, DiagGaussianProbabilityDistribution, BernoulliProbabilityDistribution, \
+    CategoricalProbabilityDistributionWithMask, MultiCategoricalProbabilityDistributionWithMask
 from stable_baselines.common.input import observation_input
 
 
@@ -123,6 +124,8 @@ class BasePolicy(ABC):
             if add_action_ph:
                 self._action_ph = tf.placeholder(dtype=ac_space.dtype, shape=(n_batch,) + ac_space.shape,
                                                  name="action_ph")
+            self._action_mask_ph = tf.placeholder(dtype=tf.float32, shape=(None,), name="action_mask_ph")
+
         self.sess = sess
         self.reuse = reuse
         self.ob_space = ob_space
@@ -160,6 +163,11 @@ class BasePolicy(ABC):
         """tf.Tensor: placeholder for actions, shape (self.n_batch, ) + self.ac_space.shape."""
         return self._action_ph
 
+    @property
+    def action_mask_ph(self):
+        """tf.Tensor: placeholder for valid actions, shape (self.n_env, self.ac_space.n)"""
+        return self._action_mask_ph
+
     @staticmethod
     def _kwargs_check(feature_extraction, kwargs):
         """
@@ -179,25 +187,27 @@ class BasePolicy(ABC):
             raise ValueError("Unknown keywords for policy: {}".format(kwargs))
 
     @abstractmethod
-    def step(self, obs, state=None, mask=None):
+    def step(self, obs, state=None, mask=None, action_mask=None):
         """
         Returns the policy for a single step
 
         :param obs: ([float] or [int]) The current observation of the environment
         :param state: ([float]) The last states (used in recurrent policies)
         :param mask: ([float]) The last masks (used in recurrent policies)
+        :param action_mask: ([bool]) The action mask to be applied (used in some discrete action spaces)
         :return: ([float], [float], [float], [float]) actions, values, states, neglogp
         """
         raise NotImplementedError
 
     @abstractmethod
-    def proba_step(self, obs, state=None, mask=None):
+    def proba_step(self, obs, state=None, mask=None, action_mask=None):
         """
         Returns the action probability for a single step
 
         :param obs: ([float] or [int]) The current observation of the environment
         :param state: ([float]) The last states (used in recurrent policies)
         :param mask: ([float]) The last masks (used in recurrent policies)
+        :param action_mask: ([bool]) The action masks
         :return: ([float]) the action probability
         """
         raise NotImplementedError
@@ -217,10 +227,10 @@ class ActorCriticPolicy(BasePolicy):
     :param scale: (bool) whether or not to scale the input
     """
 
-    def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=False, scale=False):
+    def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=False, scale=False, with_action_mask=False):
         super(ActorCriticPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse,
                                                 scale=scale)
-        self._pdtype = make_proba_dist_type(ac_space)
+        self._pdtype = make_proba_dist_type(ac_space, with_action_mask)
         self._policy = None
         self._proba_distribution = None
         self._value_fn = None
@@ -231,6 +241,10 @@ class ActorCriticPolicy(BasePolicy):
         """Sets up the distributions, actions, and value."""
         with tf.variable_scope("output", reuse=True):
             assert self.policy is not None and self.proba_distribution is not None and self.value_fn is not None
+            if isinstance(self.proba_distribution,
+                          CategoricalProbabilityDistributionWithMask) or \
+                    isinstance(self.proba_distribution, MultiCategoricalProbabilityDistribution):
+                self._action_mask_ph = self.proba_distribution.action_mask_ph
             self._action = self.proba_distribution.sample()
             self._deterministic_action = self.proba_distribution.mode()
             self._neglogp = self.proba_distribution.neglogp(self.action)
@@ -242,7 +256,7 @@ class ActorCriticPolicy(BasePolicy):
                 self._policy_proba = tf.nn.sigmoid(self.policy)
             elif isinstance(self.proba_distribution, MultiCategoricalProbabilityDistribution):
                 self._policy_proba = [tf.nn.softmax(categorical.flatparam())
-                                     for categorical in self.proba_distribution.categoricals]
+                                      for categorical in self.proba_distribution.categoricals]
             else:
                 self._policy_proba = []  # it will return nothing, as it is not implemented
             self._value_flat = self.value_fn[:, 0]
@@ -293,7 +307,7 @@ class ActorCriticPolicy(BasePolicy):
         return self._policy_proba
 
     @abstractmethod
-    def step(self, obs, state=None, mask=None, deterministic=False):
+    def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
         """
         Returns the policy for a single step
 
@@ -343,11 +357,11 @@ class RecurrentActorCriticPolicy(ActorCriticPolicy):
                                                          n_batch, reuse=reuse, scale=scale)
 
         with tf.variable_scope("input", reuse=False):
-            self._dones_ph = tf.placeholder(tf.float32, (n_batch, ), name="dones_ph")  # (done t-1)
-            state_ph_shape = (self.n_env, ) + tuple(state_shape)
+            self._dones_ph = tf.placeholder(tf.float32, (n_batch,), name="dones_ph")  # (done t-1)
+            state_ph_shape = (self.n_env,) + tuple(state_shape)
             self._states_ph = tf.placeholder(tf.float32, state_ph_shape, name="states_ph")
 
-        initial_state_shape = (self.n_env, ) + tuple(state_shape)
+        initial_state_shape = (self.n_env,) + tuple(state_shape)
         self._initial_state = np.zeros(initial_state_shape, dtype=np.float32)
 
     @property
@@ -402,7 +416,7 @@ class LstmPolicy(RecurrentActorCriticPolicy):
                  **kwargs):
         # state_shape = [n_lstm * 2] dim because of the cell and hidden states of the LSTM
         super(LstmPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch,
-                                         state_shape=(2 * n_lstm, ), reuse=reuse,
+                                         state_shape=(2 * n_lstm,), reuse=reuse,
                                          scale=(feature_extraction == "cnn"))
 
         self._kwargs_check(feature_extraction, kwargs)

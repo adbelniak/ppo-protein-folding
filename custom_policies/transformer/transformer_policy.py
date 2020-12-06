@@ -4,7 +4,7 @@ from gym_rosetta.envs.protein_fold_env import RESIDUE_LETTERS
 from stable_baselines.common.policies import ActorCriticPolicy, mlp_extractor
 from stable_baselines.common.tf_layers import linear
 from .transformer import Encoder
-
+import numpy as np
 
 class TransformerPolicy(ActorCriticPolicy):
     _encoder = None
@@ -12,8 +12,8 @@ class TransformerPolicy(ActorCriticPolicy):
 
     def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=True, layers=None,
                  net_arch=None,
-                 act_fun=tf.nn.relu, feature_extraction="mlp", **kwargs):
-        super(TransformerPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse)
+                 act_fun=tf.nn.relu, feature_extraction="mlp", with_action_mask=False, **kwargs):
+        super(TransformerPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse, with_action_mask=with_action_mask)
         encoder = TransformerPolicy.get_common_police_network()
         residue_encoder = TransformerPolicy.get_residue_encoder_networt()
 
@@ -40,20 +40,21 @@ class TransformerPolicy(ActorCriticPolicy):
 
             self._proba_distribution, self._policy, self.q_value = \
                 self.pdtype.proba_distribution_from_latent(pi_latent, vf_latent, init_scale=0.01)
-
         self._setup_init()
 
-    def step(self, obs, state=None, mask=None, deterministic=False):
+    def step(self, obs, state=None, mask=None, deterministic=False, action_mask=None):
         feed_dict = {self.obs_ph[key]: obs[key] for key in obs.keys()}
+        if action_mask is not None and len(action_mask) != 0:
+            feed_dict[self.action_mask_ph] = np.array(action_mask, dtype=np.float32)
         if deterministic:
             action, value, neglogp = self.sess.run([self.deterministic_action, self.value_flat, self.neglogp],
                                                    feed_dict)
         else:
-            action, value, neglogp = self.sess.run([self.action, self.value_flat, self.neglogp],
+            action, value, neglogp, proba = self.sess.run([self.action, self.value_flat, self.neglogp, self.policy_proba],
                                                    feed_dict)
         return action, value, self.initial_state, neglogp
 
-    def proba_step(self, obs, state=None, mask=None):
+    def proba_step(self, obs, state=None, mask=None, action_mask=None):
         return self.sess.run(self.policy_proba, {self.obs_ph: obs})
 
     def value(self, obs, state=None, mask=None):

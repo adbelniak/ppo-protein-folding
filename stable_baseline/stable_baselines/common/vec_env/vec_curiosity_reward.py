@@ -1,4 +1,5 @@
 import logging
+import os
 
 import numpy as np
 import tensorflow as tf
@@ -12,14 +13,19 @@ from stable_baselines.common.vec_env.util import obs_space_info
 from stable_baselines.common.vec_env.vec_tf_wrapper import BaseTFWrapper
 
 
-def small_convnet(x, activ = tf.nn.relu, **kwargs):
+def small_convnet(x, activ=tf.nn.relu, **kwargs):
     layer_1 = activ(tf_layers.conv(x, 'c1', n_filters=32, filter_size=8, stride=4, init_scale=np.sqrt(2), **kwargs))
-    layer_2 = activ(tf_layers.conv(layer_1, 'c2', n_filters=64, filter_size=4, stride=2, init_scale=np.sqrt(2), **kwargs))
-    layer_3 = activ(tf_layers.conv(layer_2, 'c3', n_filters=64, filter_size=3, stride=1, init_scale=np.sqrt(2), **kwargs))
+    layer_2 = activ(
+        tf_layers.conv(layer_1, 'c2', n_filters=64, filter_size=4, stride=2, init_scale=np.sqrt(2), **kwargs))
+    layer_3 = activ(
+        tf_layers.conv(layer_2, 'c3', n_filters=64, filter_size=3, stride=1, init_scale=np.sqrt(2), **kwargs))
     layer_3 = tf_layers.conv_to_fc(layer_3)
     return tf_layers.linear(layer_3, 'fc1', n_hidden=512, init_scale=np.sqrt(2))
 
-LEVELS = ['benchmark_incremental']
+
+LEVELS = [os.path.join('benchmark', x) for x in np.sort(os.listdir('protein_data/benchmark'))]
+
+
 class CuriosityWrapper(BaseTFWrapper):
     """
     Random Network Distillation (RND) curiosity reward.
@@ -40,9 +46,13 @@ class CuriosityWrapper(BaseTFWrapper):
     :param gamma: (float) Reward discount factor for intrinsic reward normalization.
     :param learning_rate: (float) Learning rate for the Adam optimizer of the predictor network.
     """
-    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 0.1, buffer_size: int = 65536, train_freq: int = 16384, gradient_steps: int = 4,
-                 batch_size: int = 4096, learning_starts: int = 100, filter_end_of_episode: bool = True, filter_reward: bool = False, norm_obs: bool = True,
-                 norm_ext_reward: bool = False, gamma: float = 0.99, learning_rate: float = 0.0001, training: bool = True, _init_setup_model=True):
+
+    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 0.5, buffer_size: int = 65536,
+                 train_freq: int = 16384, gradient_steps: int = 4,
+                 batch_size: int = 4096, learning_starts: int = 100, filter_end_of_episode: bool = True,
+                 filter_reward: bool = False, norm_obs: bool = True,
+                 norm_ext_reward: bool = False, gamma: float = 0.99, learning_rate: float = 0.0001,
+                 training: bool = True, _init_setup_model=True):
 
         BaseTFWrapper.__init__(self, env_fns)
 
@@ -65,7 +75,7 @@ class CuriosityWrapper(BaseTFWrapper):
         self.epsilon = 1e-8
         self.int_rwd_rms = RunningMeanStd(shape=(), epsilon=self.epsilon)
         self.ext_rwd_rms = RunningMeanStd(shape=(), epsilon=self.epsilon)
-        self.int_ret = np.zeros(self.num_envs) # discounted return for intrinsic reward
+        self.int_ret = np.zeros(self.num_envs)  # discounted return for intrinsic reward
         self.ext_ret = np.zeros(self.num_envs)  # discounted return for extrinsic reward
         env = self.envs[0]
         obs_space = env.observation_space
@@ -77,12 +87,12 @@ class CuriosityWrapper(BaseTFWrapper):
 
         self.updates = 0
         self.steps = 0
-        #probably not important
+        # probably not important
         self.last_action = None
-        #probably not important
+        # probably not important
         self.last_obs = None
         self.last_update = 0
-
+        self.probes_to_account = 1000
         self.graph = None
         self.sess = None
         self.observation_ph = None
@@ -98,6 +108,14 @@ class CuriosityWrapper(BaseTFWrapper):
 
         if _init_setup_model:
             self.setup_model()
+
+    def _append_distance_result(self, best_distance, start_distance):
+        norm_distance = best_distance / start_distance
+        if len(self.average_progress) < self.probes_to_account:
+            self.average_progress.append(norm_distance)
+        else:
+            self.average_progress.append(norm_distance)
+            self.average_progress.pop(0)
 
     def _increase_level(self):
         level_folder = next(self.level_generator)
@@ -117,7 +135,8 @@ class CuriosityWrapper(BaseTFWrapper):
                 if self.network_type == 'cnn':
                     self.target_network = small_convnet(self.processed_obs, tf.nn.leaky_relu)
                 elif self.network_type == 'mlp':
-                    flattened = tf.layers.flatten(tf.keras.layers.Concatenate()([self.processed_obs['backbone'], self.processed_obs['amino_acid']]))
+                    flattened = tf.layers.flatten(tf.keras.layers.Concatenate()(
+                        [self.processed_obs['backbone'], self.processed_obs['amino_acid']]))
                     # flattened = tf.layers.flatten(self.processed_obs['backbone'])
 
                     self.target_network = tf_layers.mlp(flattened, [128, 64])
@@ -129,7 +148,8 @@ class CuriosityWrapper(BaseTFWrapper):
                 if self.network_type == 'cnn':
                     self.predictor_network = tf.nn.relu(small_convnet(self.processed_obs, tf.nn.leaky_relu))
                 elif self.network_type == 'mlp':
-                    flattened = tf.layers.flatten(tf.keras.layers.Concatenate()([self.processed_obs['backbone'], self.processed_obs['amino_acid']]))
+                    flattened = tf.layers.flatten(tf.keras.layers.Concatenate()(
+                        [self.processed_obs['backbone'], self.processed_obs['amino_acid']]))
                     # flattened = tf.layers.flatten(self.processed_obs['backbone'])
                     self.predictor_network = tf_layers.mlp(flattened, [128, 64])
 
@@ -137,8 +157,10 @@ class CuriosityWrapper(BaseTFWrapper):
                 self.predictor_network = tf_layers.linear(self.predictor_network, "out", 32)
 
             with tf.name_scope("loss"):
-                self.int_reward = tf.reduce_mean(tf.square(tf.stop_gradient(self.target_network) - self.predictor_network), axis=1)
-                self.aux_loss = tf.reduce_mean(tf.square(tf.stop_gradient(self.target_network) - self.predictor_network))
+                self.int_reward = tf.reduce_mean(
+                    tf.square(tf.stop_gradient(self.target_network) - self.predictor_network), axis=1)
+                self.aux_loss = tf.reduce_mean(
+                    tf.square(tf.stop_gradient(self.target_network) - self.predictor_network))
 
             with tf.name_scope("train"):
                 self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
@@ -149,13 +171,14 @@ class CuriosityWrapper(BaseTFWrapper):
 
     def reset(self):
         self._increase_level()
-        batch_obs = []
+        batch_obs, masks = [], []
         for env_idx in range(self.num_envs):
-            obs = self.envs[env_idx].reset()
+            obs, mask = self.envs[env_idx].reset()
+            masks.append(mask)
             self._save_obs(env_idx, obs)
             batch_obs.append(obs)
         self.last_obs = batch_obs
-        return self._obs_from_buf()
+        return self._obs_from_buf(), masks
 
     def step_async(self, actions):
         super().step_async(actions)
@@ -169,16 +192,19 @@ class CuriosityWrapper(BaseTFWrapper):
             obs, self.buf_rews[env_idx], self.buf_dones[env_idx], info = \
                 self.envs[env_idx].step(self.actions[env_idx])
             if self.buf_dones[env_idx]:
+                self._append_distance_result(info["best"], info["start"])
                 self.buf_infos[env_idx]['terminal_observation'] = obs
-
-                obs = self.envs[env_idx].reset()
+                if len(self.average_progress) == self.probes_to_account and np.mean(self.average_progress) < 0.3:
+                    print("Next Level")
+                    self._increase_level()
+                obs, mask = self.envs[env_idx].reset()
+                self.buf_infos[env_idx]["action_mask"] = mask
             self._save_obs(env_idx, obs)
             self.buf_infos[env_idx] = info
             batch_obs.append(obs)
-            # for key in self.keys:
-            #     self.obs_buff[key].add(obs[key])
-            #     self.prev_obs_buff[key].add(self.last_obs[env_idx][key])
-            self.buffer.add(self.last_obs[env_idx], self.last_action[env_idx], self.buf_rews[env_idx], obs, self.buf_dones[env_idx])
+
+            self.buffer.add(self.last_obs[env_idx], self.last_action[env_idx], self.buf_rews[env_idx], obs,
+                            self.buf_dones[env_idx])
         self.last_obs = batch_obs
 
         obs = self._obs_from_buf()
@@ -204,14 +230,21 @@ class CuriosityWrapper(BaseTFWrapper):
         else:
             extrinsic_reward = np.copy(self.buf_rews)
         reward = np.squeeze(extrinsic_reward + self.intrinsic_reward_weight * intrinsic_reward)
-        print("Reward {} vs intrinsic reward: {} extr rewar: {}, mean intr: {}".format(np.max(reward), np.max(intrinsic_reward), np.max(extrinsic_reward), np.mean(intrinsic_reward)))
+        # print("Reward {} vs intrinsic reward: {} extr rewar: {}, mean intr: {}, mean extr: {}".format(np.max(reward),
+        #                                                                                               np.max(
+        #                                                                                                   intrinsic_reward),
+        #                                                                                               np.max(
+        #                                                                                                   extrinsic_reward),
+        #                                                                                               np.mean(
+        #                                                                                                   intrinsic_reward),
+        #                                                                                               np.mean(
+        #                                                                                                   extrinsic_reward)))
         if self.training and self.steps > self.learning_starts and self.steps - self.last_update > self.train_freq:
             self.updates += 1
             self.last_update = self.steps
             self.learn()
 
         return obs, reward, np.copy(self.buf_dones), self.buf_infos.copy()
-
 
     def close(self):
         VecEnvWrapper.close(self)
@@ -223,7 +256,8 @@ class CuriosityWrapper(BaseTFWrapper):
             for key in obs_batch.keys():
                 obs_batch[key] = self.normalize_obs(obs_batch[key], key)
             test = self.sess.run(self.aux_loss, {self.observation_ph[k]: obs_batch[k] for k in obs_batch.keys()})
-            train, loss = self.sess.run([self.training_op, self.aux_loss], {self.observation_ph[k]: obs_batch[k] for k in obs_batch.keys()})
+            train, loss = self.sess.run([self.training_op, self.aux_loss],
+                                        {self.observation_ph[k]: obs_batch[k] for k in obs_batch.keys()})
             total_loss += loss
         print("Trained predictor. Avg loss: {}".format(total_loss / self.gradient_steps))
 
@@ -252,8 +286,8 @@ class CuriosityWrapper(BaseTFWrapper):
         return self.params
 
     def save(self, save_path):
-        #os.makedirs(os.path.dirname(save_path), exist_ok=True)
-        #self.saver.save(self.sess, save_path)
+        # os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        # self.saver.save(self.sess, save_path)
 
         data = {
             'network': self.network_type,

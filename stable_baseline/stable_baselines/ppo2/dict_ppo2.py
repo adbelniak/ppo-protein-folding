@@ -12,6 +12,7 @@ from stable_baselines.common.schedules import get_schedule_fn
 from stable_baselines.common.tf_util import total_episode_reward_logger
 from stable_baselines.common.math_util import safe_mean
 from collections import defaultdict
+from stable_baselines.common.misc_util import flatten_action_mask
 
 
 class DictPPO2(ActorCriticRLModel):
@@ -54,7 +55,7 @@ class DictPPO2(ActorCriticRLModel):
     def __init__(self, policy, env, gamma=0.99, n_steps=128, ent_coef=0.01, learning_rate=2.5e-4, vf_coef=0.5,
                  max_grad_norm=0.5, lam=0.95, nminibatches=4, noptepochs=4, cliprange=0.2, cliprange_vf=None,
                  verbose=0, tensorboard_log=None, _init_setup_model=True, policy_kwargs=None,
-                 full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None):
+                 full_tensorboard_log=False, seed=None, n_cpu_tf_sess=None, with_action_mask=False):
 
         self.learning_rate = learning_rate
         self.cliprange = cliprange
@@ -89,6 +90,7 @@ class DictPPO2(ActorCriticRLModel):
         self.value = None
         self.n_batch = None
         self.summary = None
+        self.with_action_mask = with_action_mask
 
         super().__init__(policy=policy, env=env, verbose=verbose, requires_vec_env=True,
                          _init_setup_model=_init_setup_model, policy_kwargs=policy_kwargs,
@@ -129,12 +131,12 @@ class DictPPO2(ActorCriticRLModel):
                     n_batch_train = self.n_batch // self.nminibatches
 
                 act_model = self.policy(self.sess, self.observation_space, self.action_space, self.n_envs, 1,
-                                        n_batch_step, reuse=False, **self.policy_kwargs)
+                                        n_batch_step, reuse=False, with_action_mask=self.with_action_mask, **self.policy_kwargs)
                 with tf.variable_scope("train_model", reuse=True,
                                        custom_getter=tf_util.outer_scope_getter("train_model")):
                     train_model = self.policy(self.sess, self.observation_space, self.action_space,
                                               self.n_envs // self.nminibatches, self.n_steps, n_batch_train,
-                                              reuse=True, **self.policy_kwargs)
+                                              reuse=True, with_action_mask=self.with_action_mask, **self.policy_kwargs)
 
                 with tf.variable_scope("loss", reuse=False):
                     self.action_ph = train_model.pdtype.sample_placeholder([None], name="action_ph")
@@ -247,7 +249,7 @@ class DictPPO2(ActorCriticRLModel):
 
                 self.summary = tf.summary.merge_all()
 
-    def _train_step(self, learning_rate, cliprange, obs, returns, masks, actions, values, neglogpacs, update,
+    def _train_step(self, learning_rate, cliprange, obs, returns, masks, actions, values, neglogpacs, action_masks, update,
                     writer, states=None, cliprange_vf=None):
         """
         Training of PPO2 Algorithm
@@ -260,6 +262,7 @@ class DictPPO2(ActorCriticRLModel):
         :param actions: (np.ndarray) the actions
         :param values: (np.ndarray) the values
         :param neglogpacs: (np.ndarray) Negative Log-likelihood probability of Actions
+        :param action_masks: (np.ndarray) Mask invalid actions
         :param update: (int) the current step iteration
         :param writer: (TensorFlow Summary.writer) the writer for tensorboard
         :param states: (np.ndarray) For recurrent policies, the internal state of the recurrent model
@@ -271,6 +274,7 @@ class DictPPO2(ActorCriticRLModel):
         advs = (advs - advs.mean()) / (advs.std() + 1e-8)
         td_map = {**{self.train_model.obs_ph[k]: obs[k] for k in obs.keys()}, self.action_ph: actions,
                   self.advs_ph: advs, self.rewards_ph: returns,
+                  self.train_model.action_mask_ph: action_masks,
                   self.learning_rate_ph: learning_rate, self.clip_range_ph: cliprange,
                   self.old_neglog_pac_ph: neglogpacs, self.old_vpred_ph: values}
         if states is not None:
@@ -346,7 +350,7 @@ class DictPPO2(ActorCriticRLModel):
                 rollout = self.runner.run(callback)
 
                 # Unpack
-                obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward = rollout
+                obs, returns, masks, actions, values, neglogpacs, states, ep_infos, true_reward, action_masks = rollout
 
                 callback.on_rollout_end()
 
@@ -370,7 +374,7 @@ class DictPPO2(ActorCriticRLModel):
 
                             for k in obs.keys():
                                 obs_inp[k] = obs[k][mbinds]
-                            slices = (arr[mbinds] for arr in (returns, masks, actions, values, neglogpacs))
+                            slices = (arr[mbinds] for arr in (returns, masks, actions, values, neglogpacs, action_masks))
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, obs_inp, *slices, writer=writer,
                                                                  update=timestep, cliprange_vf=cliprange_vf_now))
                 else:  # recurrent version
@@ -387,7 +391,7 @@ class DictPPO2(ActorCriticRLModel):
                             end = start + envs_per_batch
                             mb_env_inds = env_indices[start:end]
                             mb_flat_inds = flat_indices[mb_env_inds].ravel()
-                            slices = (arr[mb_flat_inds] for arr in (obs, returns, masks, actions, values, neglogpacs))
+                            slices = (arr[mb_flat_inds] for arr in (obs, returns, masks, actions, values, neglogpacs, action_masks))
                             mb_states = states[mb_env_inds]
                             mb_loss_vals.append(self._train_step(lr_now, cliprange_now, *slices, update=timestep,
                                                                  writer=writer, states=mb_states,
@@ -449,10 +453,29 @@ class DictPPO2(ActorCriticRLModel):
 
         self._save_to_file(save_path, data=data, params=params_to_save, cloudpickle=cloudpickle)
 
-    def predict(self, observation, state=None, mask=None, deterministic=False):
+    def predict(self, observation, state=None, mask=None, deterministic=False, action_mask=None):
         feed_dict = {x: observation[key] for (i, x), key in zip(enumerate(self.act_model.obs_ph), observation.keys())}
 
-        return self.act_model.step(observation, state=None, mask=None, deterministic=deterministic)
+        return self.act_model.step(observation, state=None, mask=None, deterministic=deterministic, action_mask=action_mask)
+
+    @classmethod
+    def load(cls, load_path, with_action_mask=False, env=None, custom_objects=None, **kwargs):
+        data, params = cls._load_from_file(load_path, custom_objects=custom_objects)
+
+        if 'policy_kwargs' in kwargs and kwargs['policy_kwargs'] != data['policy_kwargs']:
+            raise ValueError("The specified policy kwargs do not equal the stored policy kwargs. "
+                             "Stored kwargs: {}, specified kwargs: {}".format(data['policy_kwargs'],
+                                                                              kwargs['policy_kwargs']))
+
+        model = cls(policy=data["policy"], env=None, _init_setup_model=False)
+        model.__dict__.update(data)
+        model.__dict__.update(kwargs)
+        model.set_env(env)
+        model.with_action_mask = with_action_mask
+        model.setup_model()
+
+        model.load_parameters(params)
+        return model
 
 class DictRunner(AbstractDictEnvRunner):
     def __init__(self, *, env, model, n_steps, gamma, lam):
@@ -514,19 +537,21 @@ class DictRunner(AbstractDictEnvRunner):
             - infos: (dict) the extra information of the model
         """
         # mb stands for minibatch
-        mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [], [], [], [], []
+        mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs, mb_action_masks = [], [], [], [], [], []
         mb_obs = defaultdict(list)
 
         mb_states = self.states
         ep_infos = []
         for _ in range(self.n_steps):
-            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones)
+            actions, values, self.states, neglogpacs = self.model.step(self.obs, self.states, self.dones, action_mask=self.action_masks)
+
             for k in self.obs.keys():
                 mb_obs[k].append(np.copy(self.obs[k]))
             mb_actions.append(actions)
             mb_values.append(values)
             mb_neglogpacs.append(neglogpacs)
             mb_dones.append(self.dones)
+            mb_action_masks.append(self.action_masks.copy())
             clipped_actions = actions
             # Clip the actions to avoid out of bound error
             if isinstance(self.env.action_space, gym.spaces.Box):
@@ -540,12 +565,16 @@ class DictRunner(AbstractDictEnvRunner):
                 if self.callback.on_step() is False:
                     self.continue_training = False
                     # Return dummy values
-                    return [None] * 9
-
+                    return [None] * 10
+            action_mask_from_batch = []
+            self.action_masks.clear()
             for info in infos:
                 maybe_ep_info = info.get('episode')
                 if maybe_ep_info is not None:
                     ep_infos.append(maybe_ep_info)
+                    # actoin mask
+                env_action_mask = info.get('action_mask')
+                self.action_masks.append(flatten_action_mask(self.env.action_space, env_action_mask))
             mb_rewards.append(rewards)
         # batch of steps to batch of rollouts
         for k in mb_obs:
@@ -555,6 +584,7 @@ class DictRunner(AbstractDictEnvRunner):
         mb_values = np.asarray(mb_values, dtype=np.float32)
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
         mb_dones = np.asarray(mb_dones, dtype=np.bool)
+        mb_action_masks = np.asarray(mb_action_masks, dtype=np.float32)
         last_values = self.model.value(self.obs, self.states, self.dones)
         # discount/bootstrap off value fn
         mb_advs = np.zeros_like(mb_rewards)
@@ -571,11 +601,11 @@ class DictRunner(AbstractDictEnvRunner):
             mb_advs[step] = last_gae_lam = delta + self.gamma * self.lam * nextnonterminal * last_gae_lam
         mb_returns = mb_advs + mb_values
 
-        mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, true_reward = \
-            map(swap_and_flatten, (mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, true_reward))
+        mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, true_reward, mb_action_masks = \
+            map(swap_and_flatten, (mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, true_reward, mb_action_masks))
         for k in mb_obs.keys():
             mb_obs[k] = swap_and_flatten(mb_obs[k])
-        return mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, mb_states, ep_infos, true_reward
+        return mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs, mb_states, ep_infos, true_reward, mb_action_masks
 
 
 # obs, returns, masks, actions, values, neglogpacs, states = runner.run()

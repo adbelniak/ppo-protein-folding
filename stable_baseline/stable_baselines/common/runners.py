@@ -6,7 +6,9 @@ import gym
 import numpy as np
 
 from stable_baselines.common.callbacks import BaseCallback
+from stable_baselines.common.misc_util import flatten_action_mask
 from stable_baselines.common.vec_env import VecEnv
+from gym.spaces import Discrete, MultiDiscrete
 
 if typing.TYPE_CHECKING:
     from stable_baselines.common.base_class import BaseRLModel  # pytype: disable=pyi-error
@@ -36,6 +38,16 @@ class AbstractEnvRunner(ABC):
         self.continue_training = True
         self.n_envs = n_envs
         self.writer = None
+
+        if isinstance(self.env.action_space, MultiDiscrete):
+            self.action_mask_shape = (self.n_envs * (n_steps + 1), sum(self.env.action_space.nvec))
+            self.action_masks = [np.ones(sum(self.env.action_space.shape)) for _ in range(self.n_envs)]
+        elif isinstance(self.env.action_space, Discrete):
+            self.action_mask_shape = (self.n_envs * (n_steps + 1), self.env.action_space.n)
+            self.action_masks = [np.ones(self.env.action_space.n) for _ in range(self.n_envs)]
+        else:
+            self.action_mask_shape = (self.n_envs * (n_steps + 1),)
+            self.action_masks = [None for _ in range(self.n_envs)]
 
     def run(self, callback: Optional[BaseCallback] = None) -> Any:
         """
@@ -73,7 +85,7 @@ class AbstractDictEnvRunner(ABC):
         n_envs = env.num_envs
         self.batch_ob_shape = dict()
         self.obs = dict()
-        obs = env.reset()
+        obs, mask = env.reset()
         for k in env.observation_space.spaces:
             self.batch_ob_shape[k] = (n_envs * n_steps,) + env.observation_space.spaces[k].shape
             self.obs[k] = np.zeros((n_envs,) + env.observation_space.spaces[k].shape,
@@ -85,6 +97,16 @@ class AbstractDictEnvRunner(ABC):
         self.callback = None  # type: Optional[BaseCallback]
         self.continue_training = True
         self.n_envs = n_envs
+        self.action_masks = [flatten_action_mask(env.action_space, x) for x in mask]
+        # if isinstance(self.env.action_space, MultiDiscrete):
+        #     self.action_mask_shape = (self.n_envs * (n_steps + 1), sum(self.env.action_space.nvec))
+        #     self.action_masks = [np.ones(sum(self.env.action_space.nvec.shape)) for _ in range(self.n_envs)]
+        # elif isinstance(self.env.action_space, Discrete):
+        #     self.action_mask_shape = (self.n_envs * (n_steps + 1), self.env.action_space.n)
+        #     self.action_masks = [np.ones(self.env.action_space.n) for _ in range(self.n_envs)]
+        # else:
+        #     self.action_mask_shape = (self.n_envs * (n_steps + 1),)
+        #     self.action_masks = [None for _ in range(self.n_envs)]
 
     def run(self, callback: Optional[BaseCallback] = None) -> Any:
         """
