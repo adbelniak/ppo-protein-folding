@@ -197,12 +197,7 @@ def make_session(num_cpu=None, make_default=False, graph=None):
     if make_default:
         return tf.InteractiveSession(config=tf_config, graph=graph)
     else:
-        from tensorflow.python import debug as tf_debug
-        sess=  tf.InteractiveSession(config=tf_config, graph=graph)
-        # sess = tf_debug.TensorBoardDebugWrapperSession(sess, "localhost:6007")
-
-        # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-        return sess
+        return tf.Session(config=tf_config, graph=graph)
 
 
 def single_threaded_session(make_default=False, graph=None):

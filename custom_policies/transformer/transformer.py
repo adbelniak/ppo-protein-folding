@@ -68,10 +68,10 @@ def scaled_dot_product_attention(q, k, v, mask):
 
 
 class MultiHeadAttention(tf.keras.layers.Layer):
-    def __init__(self, d_model, num_heads):
+    def __init__(self, d_model, num_heads, extended_capacity=1):
         super(MultiHeadAttention, self).__init__()
         self.num_heads = num_heads
-        d_model = d_model
+        d_model = d_model * extended_capacity
         self.d_model = d_model
 
         assert d_model % self.num_heads == 0
@@ -82,7 +82,7 @@ class MultiHeadAttention(tf.keras.layers.Layer):
         self.wk = tf.keras.layers.Dense(d_model)
         self.wv = tf.keras.layers.Dense(d_model)
 
-        self.dense = tf.keras.layers.Dense(d_model)
+        self.dense = tf.keras.layers.Dense(d_model // extended_capacity)
 
     def split_heads(self, x, batch_size):
         """Split the last dimension into (num_heads, depth).
@@ -119,10 +119,10 @@ class MultiHeadAttention(tf.keras.layers.Layer):
 
 
 class EncoderLayer(tf.keras.layers.Layer):
-    def __init__(self, d_model, num_heads, dff, rate=0.1):
+    def __init__(self, d_model, num_heads, dff, rate=0.1, extended_capacity=1):
         super(EncoderLayer, self).__init__()
 
-        self.mha = MultiHeadAttention(d_model, num_heads)
+        self.mha = MultiHeadAttention(d_model, num_heads, extended_capacity)
         self.ffn = point_wise_feed_forward_network(d_model, dff)
 
         self.layernorm1 = tf.keras.layers.LayerNormalization(epsilon=1e-6)
@@ -144,7 +144,7 @@ class EncoderLayer(tf.keras.layers.Layer):
 
 class Encoder(tf.keras.layers.Layer):
     def __init__(self, num_layers, d_model, num_heads, dff,
-                 maximum_position_encoding, rate=0.1):
+                 maximum_position_encoding, rate=0.1, extended_capacity=1):
         super(Encoder, self).__init__()
 
         self.d_model = d_model
@@ -153,7 +153,7 @@ class Encoder(tf.keras.layers.Layer):
         self.pos_encoding = positional_encoding(maximum_position_encoding,
                                                 self.d_model)
 
-        self.enc_layers = [EncoderLayer(d_model, num_heads, dff, rate)
+        self.enc_layers = [EncoderLayer(d_model, num_heads, dff, rate, extended_capacity)
                            for _ in range(num_layers)]
 
         self.dropout = tf.keras.layers.Dropout(rate)

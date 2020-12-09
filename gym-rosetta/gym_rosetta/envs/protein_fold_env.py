@@ -41,7 +41,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
         self.observation_space = spaces.Dict({
             # "energy": spaces.Box(low=np.array([-np.inf]), high=np.array([np.inf]), dtype=np.float32),
-            "backbone": spaces.Box(low=-3, high=3, shape=(MAX_LENGTH, 3,)),
+            "backbone": spaces.Box(low=-3, high=3, shape=(MAX_LENGTH, 2,)),
             "step_to_end": spaces.Discrete(1),
             "amino_acid": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, len(RESIDUE_LETTERS),)),
             "current_distance": spaces.Box(low=-10, high=1, shape=(1,))
@@ -91,7 +91,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         if action is not None:
             self.move_counter += 1
             # residue_number = self.current_residue + 1
-            residue_number = action[0] + 1
+            residue_number = action[0] + 1 - self.offset
             torsion_number = action[1]
             move_pose_index = action[2]
             move_pose = ANGLE_MOVE[move_pose_index]
@@ -113,6 +113,9 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
     def _encode_residues(self, sequence):
         encoded_residues = []
+        for zero in range(self.offset):
+            temp = np.zeros(len(RESIDUE_LETTERS))
+            temp[len(RESIDUE_LETTERS) - 1] = -1
         for res in sequence:
             temp = np.zeros(len(RESIDUE_LETTERS))
             temp[RESIDUE_LETTERS.index(res)] = 1
@@ -133,9 +136,9 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         # psis = np.divide(
         #     self.target_protein_pose.psi(self.current_residue + 1) - self.protein_pose.psi(self.current_residue + 1),
         #     180.0)
-        psis = np.divide([self.target_protein_pose.psi(i + 1) - self.protein_pose.psi(i + 1) for i in
+        psis = np.divide([self.protein_pose.psi(i + 1) for i in
                           range(self.protein_pose.total_residue())], 180.0)
-        phis = np.divide([self.target_protein_pose.phi(i + 1) - self.protein_pose.phi(i + 1) for i in
+        phis = np.divide([ self.protein_pose.phi(i + 1) for i in
                           range(self.protein_pose.total_residue())], 180.0)
 
         # omegas = np.divide([self.target_protein_pose.omega(i + 1) - self.protein_pose.omega(i + 1) for i in range(self.protein_pose.total_residue())], 180.0)
@@ -143,12 +146,12 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         #     self.target_protein_pose.phi(self.current_residue + 1) - self.protein_pose.phi(self.current_residue + 1),
         #     180.0)
         rest_zeros = MAX_LENGTH - len(self.target_protein_pose.sequence())
-        psis = np.concatenate((psis, np.zeros(rest_zeros)))
-        phis = np.concatenate((phis, np.zeros(rest_zeros)))
+        psis = np.concatenate((np.zeros(self.offset), psis, np.zeros(rest_zeros)))
+        phis = np.concatenate((np.zeros(self.offset), phis, np.zeros(rest_zeros)))
         one_hot = np.zeros(MAX_LENGTH)
-        one_hot[self.current_residue + 1] = 1
-        backbone_geometry = [[psi, phi, one] for psi, phi, one in
-                             zip(psis, phis, one_hot)]
+        one_hot[self.offset + self.current_residue + 1] = 1
+        backbone_geometry = [[psi, phi] for psi, phi in
+                             zip(psis, phis)]
         distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
 
         return {
@@ -192,8 +195,9 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         return angle_distance / np.pi
 
     def _get_action_mask(self):
-        mask = np.zeros(MAX_LENGTH - self.protein_pose.total_residue() - 1)
-        residue_mask = np.concatenate((np.ones(self.protein_pose.total_residue() + 1), mask))
+        offset = np.zeros(self.offset)
+        mask = np.zeros(MAX_LENGTH - self.protein_pose.total_residue() + 1 - self.offset)
+        residue_mask = np.concatenate(([0], offset, np.ones(self.protein_pose.total_residue() - 2), mask))
         return np.array([residue_mask, np.array([1, 1]), np.ones(len(ANGLE_MOVE))])
 
     def step(self, action):
@@ -202,12 +206,14 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         # done = False
         reward = penalty
         torsion = action[1]
-        if torsion < 2:
-            current_angle_distance = self.get_residue_distance(torsion, self.current_residue)
+        residue = action[0]
 
-            # reward += self.prev_residues_angle_distane[
-            #               (self.current_residue + 1) * 2 + torsion] - current_angle_distance
-            self.prev_residues_angle_distane[(self.current_residue + 1) * 2 + torsion] = current_angle_distance
+        if torsion < 2:
+            current_angle_distance = self.get_residue_distance(torsion, residue)
+
+            reward += 0.1 * (self.prev_residues_angle_distane[
+                          residue * 2 + torsion] - current_angle_distance)
+            self.prev_residues_angle_distane[residue * 2 + torsion] = current_angle_distance
         # if not self.move_counter % 4:
         #     self.current_residue += 1
         # if self.current_residue >= self.protein_pose.total_residue() - 1:
@@ -219,8 +225,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
         # if self.prev_energy:
         #     reward += (self.prev_energy - energy) / self.start_energy
-        if self.prev_ca_rmsd:
-            reward += 0.1 * (self.prev_ca_rmsd - distance) / self.start_distance
+        # if self.prev_ca_rmsd:
+        #     reward += 0.1 * (self.prev_ca_rmsd - distance) / self.start_distance
 
         if self.best_distance > distance:
             # if distance < self.start_distance * 0.5:
@@ -237,7 +243,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             reward += 4
             self.done = True
 
-        if self.move_counter >= 64:
+        if self.move_counter >= 32:
             # reward -= distance / self.start_distance
             self.done = True
         mask = self._get_action_mask()
@@ -255,46 +261,44 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
     #     print("COPIED")
 
     def reset(self):
-        try:
-            dir = self.level_dir
-            self.offset = np.random.randint(0, 10)
-            protein_name = np.random.choice(os.listdir(dir))
-            if self.start_distance > self.best_distance:
-                self.write_best_conformation(self.best_distance)
-            self.name = protein_name
+        dir = self.level_dir
+        # self.offset = np.random.randint(0, 3)
+        protein_name = np.random.choice(os.listdir(dir))
+        if self.start_distance > self.best_distance:
+            self.write_best_conformation(self.best_distance)
+        self.name = protein_name
 
-            self.target_protein_pose = pose_from_pdb(os.path.join(dir, self.name))
-            self.prev_residues_angle_distane = {}
-            self.protein_pose = self.set_default_pose(pose_from_pdb(os.path.join(dir, self.name)))
-            for i in range(1, self.target_protein_pose.total_residue()):
-                self.prev_residues_angle_distane[i * 2] = self.get_residue_distance(0, i)
-                self.prev_residues_angle_distane[i * 2 + 1] = self.get_residue_distance(1, i)
+        self.target_protein_pose = pose_from_pdb(os.path.join(dir, self.name))
+        self.prev_residues_angle_distane = np.zeros(self.target_protein_pose.total_residue() * 2)
+        self.protein_pose = self.set_default_pose(pose_from_pdb(os.path.join(dir, self.name)))
+        for i in range(0, self.target_protein_pose.total_residue()):
+            self.prev_residues_angle_distane[i * 2] = self.get_residue_distance(0, i)
+            self.prev_residues_angle_distane[i * 2 + 1] = self.get_residue_distance(1, i)
 
-            # if not self.shuffle:
-            #     self.protein_pose = pose_from_sequence(self.target_protein_pose.sequence())
-            # else:
-            self.start_distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
+        # if not self.shuffle:
+        #     self.protein_pose = pose_from_sequence(self.target_protein_pose.sequence())
+        # else:
+        self.start_distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
 
-            # self.scramble_pose(self.protein_pose)
-            self.move_counter = 0
-            self.reward = 0.0
-            self.prev_ca_rmsd = None
-            self.achieved_goal_counter = 0
-            self.current_residue = 1
+        # self.scramble_pose(self.protein_pose)
+        self.move_counter = 0
+        self.reward = 0.0
+        self.prev_ca_rmsd = None
+        self.achieved_goal_counter = 0
+        self.current_residue = 1
 
-            self.best_distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
+        self.best_distance = self._get_ca_metric(self.protein_pose, self.target_protein_pose)
 
-            self.best_energy = self.scorefxn(self.protein_pose)
-            self.start_energy = self.scorefxn(self.protein_pose)
-            self.prev_energy = self.scorefxn(self.protein_pose)
+        self.best_energy = self.scorefxn(self.protein_pose)
+        self.start_energy = self.scorefxn(self.protein_pose)
+        self.prev_energy = self.scorefxn(self.protein_pose)
 
-            self.encoded_residue_sequence = self._encode_residues(self.target_protein_pose.sequence())
-            self.save_best_matches()
-            self.epoch_counter += 1
-            mask = self._get_action_mask()
-            return self._get_state(), mask
-        except:
-            print(self.name)
+        self.encoded_residue_sequence = self._encode_residues(self.target_protein_pose.sequence())
+        self.save_best_matches()
+        self.epoch_counter += 1
+        mask = self._get_action_mask()
+        return self._get_state(), mask
+
 
     def scramble_pose(self, pose):
         if np.random.rand() > 0.4:

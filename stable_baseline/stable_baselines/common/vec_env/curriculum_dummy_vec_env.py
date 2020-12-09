@@ -47,7 +47,7 @@ class CurriculumDummyVecEnv(DummyVecEnv):
                     print("Next Level")
                     self._increase_level()
                 obs, mask = self.envs[env_idx].reset()
-                self.buf_infos[env_idx]["action_mask"] = mask
+                info["action_mask"] = mask
             self._save_obs(env_idx, obs)
             self.buf_infos[env_idx] = info
         return (self._obs_from_buf(), np.copy(self.buf_rews), np.copy(self.buf_dones),

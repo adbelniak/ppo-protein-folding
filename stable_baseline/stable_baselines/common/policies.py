@@ -352,9 +352,9 @@ class RecurrentActorCriticPolicy(ActorCriticPolicy):
     recurrent = True
 
     def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch,
-                 state_shape, reuse=False, scale=False):
+                 state_shape, reuse=False, scale=False, with_action_mask=False):
         super(RecurrentActorCriticPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps,
-                                                         n_batch, reuse=reuse, scale=scale)
+                                                         n_batch, reuse=reuse, scale=scale, with_action_mask=with_action_mask)
 
         with tf.variable_scope("input", reuse=False):
             self._dones_ph = tf.placeholder(tf.float32, (n_batch,), name="dones_ph")  # (done t-1)

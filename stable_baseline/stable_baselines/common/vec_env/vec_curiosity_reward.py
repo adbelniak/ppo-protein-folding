@@ -23,7 +23,8 @@ def small_convnet(x, activ=tf.nn.relu, **kwargs):
     return tf_layers.linear(layer_3, 'fc1', n_hidden=512, init_scale=np.sqrt(2))
 
 
-LEVELS = [os.path.join('benchmark', x) for x in np.sort(os.listdir('protein_data/benchmark'))]
+# LEVELS = [os.path.join('benchmark', x) for x in np.sort(os.listdir('protein_data/benchmark'))]
+LEVELS = [x for x in ['short_4', 'short_5', 'short_6']]
 
 
 class CuriosityWrapper(BaseTFWrapper):
@@ -47,7 +48,7 @@ class CuriosityWrapper(BaseTFWrapper):
     :param learning_rate: (float) Learning rate for the Adam optimizer of the predictor network.
     """
 
-    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 0.5, buffer_size: int = 65536,
+    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 0.1, buffer_size: int = 65536,
                  train_freq: int = 16384, gradient_steps: int = 4,
                  batch_size: int = 4096, learning_starts: int = 100, filter_end_of_episode: bool = True,
                  filter_reward: bool = False, norm_obs: bool = True,
@@ -92,7 +93,7 @@ class CuriosityWrapper(BaseTFWrapper):
         # probably not important
         self.last_obs = None
         self.last_update = 0
-        self.probes_to_account = 1000
+        self.probes_to_account = 4000
         self.graph = None
         self.sess = None
         self.observation_ph = None
@@ -198,7 +199,7 @@ class CuriosityWrapper(BaseTFWrapper):
                     print("Next Level")
                     self._increase_level()
                 obs, mask = self.envs[env_idx].reset()
-                self.buf_infos[env_idx]["action_mask"] = mask
+                info["action_mask"] = mask
             self._save_obs(env_idx, obs)
             self.buf_infos[env_idx] = info
             batch_obs.append(obs)
