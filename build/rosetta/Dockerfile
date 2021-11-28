@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM intel/intel-optimized-tensorflow:1.15.2
 RUN apt-get -y update \
     && apt-get -y install \
     curl \
