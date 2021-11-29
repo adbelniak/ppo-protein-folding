@@ -123,7 +123,7 @@ setup(name='stable_baselines',
           'stable_baselines': ['py.typed', 'version.txt'],
       },
       install_requires=[
-          'gym[atari,classic_control]>=0.11',
+          'gym[atari,classic_control]==0.15',
           'scipy',
           'joblib',
           'cloudpickle>=0.5.5',

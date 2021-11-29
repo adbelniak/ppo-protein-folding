@@ -2,14 +2,15 @@ import numpy as np
 from stable_baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 import os
 
-LEVELS = [os.path.join('benchmark', x) for x in np.sort(os.listdir('protein_data/benchmark'))]
 # LEVELS = ['benchmark/bench_1']
 class CurriculumDummyVecEnv(DummyVecEnv):
+    LEVELS = [os.path.join('benchmark', x) for x in np.sort(os.listdir('protein_data/benchmark'))]
+
     def __init__(self, env_fns):
         DummyVecEnv.__init__(self, env_fns)
         self.average_progress = []
         self.probes_to_account = 1000
-        self.level_generator = (x for x in LEVELS)
+        self.level_generator = (x for x in self.LEVELS)
 
     def _append_distance_result(self, best_distance, start_distance):
         norm_distance = best_distance / start_distance
