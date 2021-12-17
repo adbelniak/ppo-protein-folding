@@ -23,7 +23,7 @@ RESIDUE_LETTERS = [
     'A', 'V', 'I', 'L', 'M', 'F', 'Y', 'W', 'empty'
 ]
 
-MAX_LENGTH = 5
+MAX_LENGTH = 10
 
 class ProteinLibrary:
     def __init__(self):
@@ -35,12 +35,12 @@ class ProteinLibrary:
         self.library[name] = pose_from_pdb(name)
         return self.library[name].clone()
 
-class ProteinFoldEnv(gym.Env, utils.EzPickle):
+class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
 
     _library = ProteinLibrary()
 
     def __init__(self, max_move_amount=30):
-        super(ProteinFoldEnv, self).__init__()
+        super(ProteinFoldEnvDqn, self).__init__()
         self.reward = 0.0
         self.prev_ca_rmsd = None
         self.protein_pose = None
@@ -52,12 +52,14 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.best_conformations_dict = {}
 
         self.observation_space = spaces.Dict({
+            # "energy": spaces.Box(low=np.array([-np.inf]), high=np.array([np.inf]), dtype=np.float32),
+            # "backbone": spaces.Box(low=-3, high=3, shape=(MAX_LENGTH, 2,)),
             "amino_acid": spaces.Box(low=0, high=len(RESIDUE_LETTERS), shape=(MAX_LENGTH,), dtype=np.int),
             "torsion_angles": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, 4,)),
             "energy": spaces.Box(low=-10, high=10, shape=(1,)),
             # "delta_energy": spaces.Box(low=-10, high=1, shape=(1,))
         })
-        self.action_space = spaces.MultiDiscrete([3, 2, len(ANGLE_MOVE)])
+        self.action_space = spaces.Discrete(3 * 2 * len(ANGLE_MOVE))
         self.epoch_counter = 0
         # self.action_space = spaces.Dict({
         #     "angles": spaces.Box(low=-1, high=1, shape=(3,)),
@@ -99,6 +101,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         set_angle(residue_number, new_torsion_position)
 
     def _move(self, action):
+        if self.move_counter:
+            print(action)
         self.move_counter += 1
         residue_number = action[0] + 1
         torsion_number = action[1]
@@ -137,17 +141,16 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         return np.column_stack((np.cos(np.radians(angles)), np.sin(np.radians(angles))))
 
     def _get_state(self):
-        psis = self._convert_to_sin_cos(
-            [self.protein_pose.psi(i + 1) for i in range(self.total_current_residue)])
+        psis = self._convert_to_sin_cos([self.protein_pose.psi(i + 1) for i in range(self.total_current_residue)])
         phis = self._convert_to_sin_cos([self.protein_pose.phi(i + 1) for i in
-                                         range(self.total_current_residue)])
+                          range(self.total_current_residue)])
 
         ca_coordinate = np.divide([self.protein_pose.residue(i + 1).xyz("CA") for i in
                                    range(self.total_current_residue)], 100.0)
 
         rest_zeros = MAX_LENGTH - self.total_current_residue
         psis = np.concatenate((psis, np.zeros((rest_zeros, 2))))
-        phis = np.concatenate((phis, np.zeros((rest_zeros, 2))))
+        phis = np.concatenate((phis, np.zeros((rest_zeros,2 ))))
         cord = np.concatenate((ca_coordinate, np.zeros((rest_zeros, 3))))
 
         # self.prev_energy =
@@ -158,6 +161,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             "torsion_angles": torsion_angles,
             # "ca_geometry": padded_ca_coordinate,
             "energy": [self.scorefxn(self.protein_pose) / self.start_energy],
+            "delta_energy": [self.scorefxn(self.protein_pose) / self.start_energy],
+
             "amino_acid": self.encoded_residue_sequence,
         }
 
@@ -205,10 +210,11 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         angle = action % angles_move_len
         torsion = (action - angle) % (angles_move_len * 2) / angles_move_len
         amino = (action - angle - angles_move_len * torsion) / (angles_move_len * 2)
-        return [amino, torsion, angle]
+        return [int(amino), int(torsion), angle]
 
     def step(self, action):
         self.done = False
+        action = self._decode_action(action)
         penalty = self._move(action)
         reward = penalty
         ob = self._get_state()
@@ -220,14 +226,16 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             self.best_distance = distance
             self.best_energy = energy
         terminal_observation = {}
-
+        reward += (self.prev_distance - distance) /self.start_distance
+        self.prev_distance = distance
         if distance < self.start_distance * 0.2:
             reward += 5
             self.done = True
             terminal_observation = {'terminal_observation': ob}
 
+
         elif self.move_counter >= self.max_move_amount:
-            reward += self.start_distance - distance / self.start_distance
+            # reward += (self.start_distance - distance) / self.start_distance
             self.done = True
             terminal_observation = {'terminal_observation': ob}
 
@@ -262,9 +270,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.list_name = os.listdir(protein_directory)
         self.name = np.random.choice(os.listdir(protein_directory))
         protein_path = os.path.join(protein_directory, self.name)
-        self.target_protein_pose = ProteinFoldEnv._library.get_protein(protein_path)
+        self.target_protein_pose = ProteinFoldEnvDqn._library.get_protein(protein_path)
         self.protein_pose = self.set_default_pose(self.target_protein_pose.clone())
-
         self.move_counter = 0
         self.reward = 0.0
         self.current_residue = 1

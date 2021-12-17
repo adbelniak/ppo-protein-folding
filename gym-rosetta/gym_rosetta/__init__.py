@@ -6,5 +6,5 @@ register(
 )
 register(
     id='dqn-protein-fold-v0',
-    entry_point='gym_rosetta.envs:DQNProteinFoldEnv',
+    entry_point='gym_rosetta.envs:ProteinFoldEnvDqn',
 )
