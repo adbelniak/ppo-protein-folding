@@ -29,7 +29,7 @@ payload = {
               "attribute": "entity_poly.rcsb_sample_sequence_length",
               "operator": "less",
               "negation": False,
-              "value": 16
+              "value": 17
             }
           },
           {
@@ -133,7 +133,8 @@ def arg_parse():
 
 
 if __name__ == '__main__':
-    # args = arg_parse()
-    # protein_name_list = search_proteins()
-    # download_proteins(args.saving_directory, protein_name_list)
-    clean_protein_files('protein_data/baseline', 'protein_data/baseline')
+    args = arg_parse()
+    protein_name_list = search_proteins()
+    print(len(protein_name_list))
+    download_proteins(args.saving_directory, protein_name_list)
+    clean_protein_files('protein_data/baseline', 'protein_data/baseline', 17)

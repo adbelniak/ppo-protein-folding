@@ -7,7 +7,7 @@ import pdbtools
 from shutil import copyfile
 from pyrosetta.toolbox import cleanATOM
 init()
-def clean_protein_files(dir: str, out_dir: str):
+def clean_protein_files(dir: str, out_dir: str, max_res):
     for file in os.listdir(dir):
         try:
             f = open(os.path.join(dir,file), 'r')
@@ -22,10 +22,12 @@ def clean_protein_files(dir: str, out_dir: str):
             g.close()
             target_protein_pose = pose_from_pdb(os.path.join(out_dir, file))
 
-            # if target_protein_pose.total_residue() < 2:
-            #     os.remove(os.path.join(dir, file))
+            if target_protein_pose.total_residue() < 2 or target_protein_pose.total_residue() > max_res:
+                os.remove(os.path.join(dir, file))
         except Exception as e:
             print(e)
+            print("REMOVED demaged protein ", file)
+            os.remove(os.path.join(dir, file))
             pass
 
 def sort_pdbs(dir: str):
