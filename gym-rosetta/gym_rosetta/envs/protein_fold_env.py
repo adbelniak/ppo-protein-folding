@@ -227,7 +227,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             terminal_observation = {'terminal_observation': ob}
 
         elif self.move_counter >= self.max_move_amount:
-            reward += self.start_distance - distance / self.start_distance
+            reward += (self.start_distance - distance) / self.start_distance
             self.done = True
             terminal_observation = {'terminal_observation': ob}
 
