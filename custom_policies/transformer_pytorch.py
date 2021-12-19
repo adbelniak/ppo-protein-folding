@@ -100,7 +100,6 @@ class ActorCriticTransformerPolicy(ActorCriticPolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
     ):
-        print('przeszlo')
         super(ActorCriticTransformerPolicy, self).__init__(
             observation_space,
             action_space,

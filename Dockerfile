@@ -14,7 +14,7 @@ RUN cd stable-baselines3 && \
 
 RUN pip3 install -e gym-rosetta
 
-#RUN git clone https://github.com/adbelniak/pdbtools.git && \
-#    pip3 install -e pdbtools
+RUN git clone https://github.com/adbelniak/pdbtools.git && \
+    pip3 install -e pdbtools
 
 CMD /bin/bash

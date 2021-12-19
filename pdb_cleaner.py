@@ -1,10 +1,11 @@
+
 from pdbtools.clean import pdbClean
 import os
 from pyrosetta import init, pose_from_pdb, pose_from_sequence
 from pyrosetta.rosetta.core.scoring import CA_rmsd
 import pdbtools
 from shutil import copyfile
-
+from pyrosetta.toolbox import cleanATOM
 init()
 def clean_protein_files(dir: str, out_dir: str):
     for file in os.listdir(dir):
@@ -16,13 +17,13 @@ def clean_protein_files(dir: str, out_dir: str):
 
             pdb = pdbClean(pdb, renumber_residues=True)
 
-            g = open(os.path.join(dir, file), "w")
+            g = open(os.path.join(out_dir, file), "w")
             g.writelines(pdb)
             g.close()
-            target_protein_pose = pose_from_pdb(os.path.join(dir, file))
+            target_protein_pose = pose_from_pdb(os.path.join(out_dir, file))
 
-            if target_protein_pose.total_residue() < 2:
-                os.remove(os.path.join(dir, file))
+            # if target_protein_pose.total_residue() < 2:
+            #     os.remove(os.path.join(dir, file))
         except Exception as e:
             print(e)
             pass
