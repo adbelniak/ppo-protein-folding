@@ -57,6 +57,8 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
             "amino_acid": spaces.Box(low=0, high=len(RESIDUE_LETTERS), shape=(MAX_LENGTH,), dtype=np.int),
             "torsion_angles": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, 4,)),
             "energy": spaces.Box(low=-10, high=10, shape=(1,)),
+            "step": spaces.Box(low=0, high=1, shape=(1,)),
+
             # "delta_energy": spaces.Box(low=-10, high=1, shape=(1,))
         })
         self.action_space = spaces.Discrete(MAX_LENGTH * 2 * len(ANGLE_MOVE))
@@ -161,6 +163,7 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
             "energy": [self.scorefxn(self.protein_pose) / self.start_energy],
 
             "amino_acid": self.encoded_residue_sequence,
+            "step": self.move_counter / self.max_move_amount
         }
 
     def save_best_matches(self):
