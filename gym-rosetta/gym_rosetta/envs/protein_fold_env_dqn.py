@@ -23,7 +23,7 @@ RESIDUE_LETTERS = [
     'A', 'V', 'I', 'L', 'M', 'F', 'Y', 'W', 'empty'
 ]
 
-MAX_LENGTH = 10
+MAX_LENGTH = 16
 
 class ProteinLibrary:
     def __init__(self):
@@ -39,7 +39,7 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
 
     _library = ProteinLibrary()
 
-    def __init__(self, max_move_amount=30):
+    def __init__(self, max_move_amount=64):
         super(ProteinFoldEnvDqn, self).__init__()
         self.reward = 0.0
         self.prev_ca_rmsd = None
@@ -59,7 +59,7 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
             "energy": spaces.Box(low=-10, high=10, shape=(1,)),
             # "delta_energy": spaces.Box(low=-10, high=1, shape=(1,))
         })
-        self.action_space = spaces.Discrete(3 * 2 * len(ANGLE_MOVE))
+        self.action_space = spaces.Discrete(RESIDUE_LETTERS * 2 * len(ANGLE_MOVE))
         self.epoch_counter = 0
         # self.action_space = spaces.Dict({
         #     "angles": spaces.Box(low=-1, high=1, shape=(3,)),
@@ -79,7 +79,7 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
         self.best_energy = None
         self.prev_energy = None
         self.start_energy = 10000
-        self.level_dir = 'protein_data/short_4_1'
+        self.level_dir = 'protein_data/baseline'
         self.offset = 0
 
     def _configure_environment(self):
@@ -101,8 +101,6 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
         set_angle(residue_number, new_torsion_position)
 
     def _move(self, action):
-        if self.move_counter:
-            print(action)
         self.move_counter += 1
         residue_number = action[0] + 1
         torsion_number = action[1]
@@ -119,7 +117,7 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
                                       self.protein_pose.set_psi)
             return 0.0
         else:
-            return -0.5
+            return -0.1
 
     def _get_residue_metric(self, resiude_pose, target_residue_pose):
         angle_distance = np.arctan2(np.sin(resiude_pose - target_residue_pose),
@@ -161,7 +159,6 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
             "torsion_angles": torsion_angles,
             # "ca_geometry": padded_ca_coordinate,
             "energy": [self.scorefxn(self.protein_pose) / self.start_energy],
-            "delta_energy": [self.scorefxn(self.protein_pose) / self.start_energy],
 
             "amino_acid": self.encoded_residue_sequence,
         }
