@@ -59,7 +59,7 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
             "energy": spaces.Box(low=-10, high=10, shape=(1,)),
             # "delta_energy": spaces.Box(low=-10, high=1, shape=(1,))
         })
-        self.action_space = spaces.Discrete(RESIDUE_LETTERS * 2 * len(ANGLE_MOVE))
+        self.action_space = spaces.Discrete(MAX_LENGTH * 2 * len(ANGLE_MOVE))
         self.epoch_counter = 0
         # self.action_space = spaces.Dict({
         #     "angles": spaces.Box(low=-1, high=1, shape=(3,)),
