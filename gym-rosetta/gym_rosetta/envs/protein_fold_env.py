@@ -72,7 +72,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.best_energy = None
         self.prev_energy = None
         self.start_energy = 10000
-        self.level_dir = 'protein_data/short_4_1'
+        self.level_dir = 'protein_data/baseline'
         self.offset = 0
 
     def _configure_environment(self):
@@ -232,7 +232,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
                 {"best": self.best_distance, "name": self.name, "start": self.start_distance, **terminal_observation }]
 
     def set_default_pose(self, protein_pose):
-        for i in range(1, protein_pose.total_residue()):
+        for i in range(1, protein_pose.total_residue() + 1):
             protein_pose.set_phi(i, 180)
             protein_pose.set_psi(i, 180)
         return protein_pose

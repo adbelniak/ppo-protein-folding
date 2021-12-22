@@ -243,7 +243,7 @@ class ProteinFoldEnvDqn(gym.Env, utils.EzPickle):
                 {"best": self.best_distance, "name": self.name, "start": self.start_distance, **terminal_observation }]
 
     def set_default_pose(self, protein_pose):
-        for i in range(1, protein_pose.total_residue()):
+        for i in range(1, protein_pose.total_residue() + 1):
             protein_pose.set_phi(i, 180)
             protein_pose.set_psi(i, 180)
         return protein_pose

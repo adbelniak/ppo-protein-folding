@@ -50,25 +50,19 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         embed_dim = 16
         num_heads = 2
 
-        extractors = {}
         self.pe = PositionalEncoding(embed_dim, 0, max_len=32)
 
-        self.transformerEncoderLayer = TransformerEncoderLayer(embed_dim, num_heads, dim_feedforward=32)
-        self.transformerEncoderStandardLayer = torch.nn.TransformerEncoderLayer(embed_dim, num_heads, 32, 0,
+        # self.transformerEncoderLayer = TransformerEncoderLayer(embed_dim, num_heads, dim_feedforward=32)
+        self.transformerEncoderStandardLayer = torch.nn.TransformerEncoderLayer(2*embed_dim, num_heads, 32, 0,
                                                     torch.nn.functional.relu, 1e-5, True, False,)
-        encoder_norm = LayerNorm(embed_dim, eps=1e-5, )
-        self.encoder = TransformerEncoder(
-            self.transformerEncoderLayer,
+        encoder_norm = LayerNorm(2*embed_dim, eps=1e-5, )
+        self.encoder = torch.nn.TransformerEncoder(
             self.transformerEncoderStandardLayer,
-            num_layers=1,norm=encoder_norm)
-        total_concat_size = 0
+            num_layers=1, norm=encoder_norm)
         self.value_key = nn.Conv1d(observation_space['torsion_angles'].shape[1], embed_dim, (1,))
-
-                # Run through a simple MLP
         self.query = nn.Embedding(len(RESIDUE_LETTERS) + 2 , embed_dim)
 
-        # Update the features dim manually
-        self._features_dim = embed_dim * observation_space['torsion_angles'].shape[0] + 2
+        self._features_dim = 2*embed_dim * observation_space['torsion_angles'].shape[0] + 2
 
     def forward(self, observations) -> th.Tensor:
 
@@ -77,10 +71,10 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         embedded_angle = self.value_key(embedded_angle)
         embedded_angle = transpose(embedded_angle, 1, 2)
         embedded_seq = self.query(observations['amino_acid'].type(torch.IntTensor))
-        # print(self.value_key.weight)
         embedded_angle = self.pe(embedded_angle)
         embedded_seq = self.pe(embedded_seq)
-        x = self.encoder(embedded_angle, embedded_seq, embedded_angle)
+        stacked = torch.cat((embedded_angle,embedded_seq ), dim=2)
+        x = self.encoder(stacked)
         x = torch.nn.Flatten()(x)
         x = torch.cat((x, observations['energy'], observations['step']), dim=1)
         # Return a (B, self._features_dim) PyTorch tensor, where B is batch dimension.
