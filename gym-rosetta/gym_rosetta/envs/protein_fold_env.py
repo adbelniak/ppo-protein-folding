@@ -55,15 +55,10 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             "amino_acid": spaces.Box(low=0, high=len(RESIDUE_LETTERS), shape=(MAX_LENGTH,), dtype=np.int),
             "torsion_angles": spaces.Box(low=-1, high=1, shape=(MAX_LENGTH, 4,)),
             "energy": spaces.Box(low=-10, high=10, shape=(1,)),
-            # "delta_energy": spaces.Box(low=-10, high=1, shape=(1,))
+            "step": spaces.Box(low=0, high=1, shape=(1,)),
         })
         self.action_space = spaces.MultiDiscrete([MAX_LENGTH - 1, 2, len(ANGLE_MOVE)])
         self.epoch_counter = 0
-        # self.action_space = spaces.Dict({
-        #     "angles": spaces.Box(low=-1, high=1, shape=(3,)),
-        #     "torsion": spaces.Discrete(3),
-        #     "residue": spaces.Discrete(MAX_LENGTH)
-        # })
         self.encoded_residue_sequence = None
         self.scorefxn = get_fa_scorefxn()
         self.best_distance = np.inf
@@ -77,7 +72,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.best_energy = None
         self.prev_energy = None
         self.start_energy = 10000
-        self.level_dir = 'protein_data/baseline'
+        self.level_dir = 'protein_data/short_4_1'
         self.offset = 0
 
     def _configure_environment(self):
@@ -159,6 +154,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             # "ca_geometry": padded_ca_coordinate,
             "energy": [self.scorefxn(self.protein_pose) / self.start_energy],
             "amino_acid": self.encoded_residue_sequence,
+            "step": self.move_counter / self.max_move_amount
         }
 
     def save_best_matches(self):
@@ -227,6 +223,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             terminal_observation = {'terminal_observation': ob}
 
         elif self.move_counter >= self.max_move_amount:
+            print(self.name)
             reward += (self.start_distance - distance) / self.start_distance
             self.done = True
             terminal_observation = {'terminal_observation': ob}

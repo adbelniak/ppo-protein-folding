@@ -9,7 +9,9 @@ from stable_baselines3.common.torch_layers import (
 from stable_baselines3.common.type_aliases import Schedule
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
-from custom_policies.transformer_encoder_layer import TransformerEncoderLayer
+from torch.nn import LayerNorm
+
+from custom_policies.transformer_encoder_layer import TransformerEncoderLayer, TransformerEncoder
 import math
 
 RESIDUE_LETTERS = [
@@ -51,7 +53,14 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         extractors = {}
         self.pe = PositionalEncoding(embed_dim, 0, max_len=32)
 
-        self.transformerEncoder = TransformerEncoderLayer(embed_dim, num_heads, dim_feedforward=32)
+        self.transformerEncoderLayer = TransformerEncoderLayer(embed_dim, num_heads, dim_feedforward=32)
+        self.transformerEncoderStandardLayer = torch.nn.TransformerEncoderLayer(embed_dim, num_heads, 32, 0,
+                                                    torch.nn.functional.relu, 1e-5, True, False,)
+        encoder_norm = LayerNorm(embed_dim, eps=1e-5, )
+        self.encoder = TransformerEncoder(
+            self.transformerEncoderLayer,
+            self.transformerEncoderStandardLayer,
+            num_layers=1,norm=encoder_norm)
         total_concat_size = 0
         self.value_key = nn.Conv1d(observation_space['torsion_angles'].shape[1], embed_dim, (1,))
 
@@ -71,7 +80,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         # print(self.value_key.weight)
         embedded_angle = self.pe(embedded_angle)
         embedded_seq = self.pe(embedded_seq)
-        x = self.transformerEncoder(embedded_angle, embedded_seq, embedded_angle)
+        x = self.encoder(embedded_angle, embedded_seq, embedded_angle)
         x = torch.nn.Flatten()(x)
         x = torch.cat((x, observations['energy'], observations['step']), dim=1)
         # Return a (B, self._features_dim) PyTorch tensor, where B is batch dimension.

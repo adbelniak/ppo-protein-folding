@@ -4,6 +4,9 @@ from torch import functional as F
 
 from typing import Optional, Any, Union, Callable
 
+from torch.nn.modules.transformer import _get_clones
+
+
 class TransformerEncoderLayer(Module):
     r"""TransformerEncoderLayer is made up of self-attn and feedforward network.
     This standard encoder layer is based on the paper "Attention Is All You Need".
@@ -91,3 +94,23 @@ class TransformerEncoderLayer(Module):
     def _ff_block(self, x: Tensor) -> Tensor:
         x = self.linear2(self.dropout(self.activation(self.linear1(x))))
         return self.dropout2(x)
+
+class TransformerEncoder(Module):
+    __constants__ = ['norm']
+
+    def __init__(self, first_layer, encoder_layer, num_layers, norm=None):
+        super(TransformerEncoder, self).__init__()
+        self.first_layer = first_layer
+        self.layers = _get_clones(encoder_layer, num_layers)
+        self.num_layers = num_layers
+        self.norm = norm
+
+    def forward(self, key: Tensor, query: Tensor, value: Tensor) -> Tensor:
+        output = self.first_layer(key, query, value)
+        for mod in self.layers:
+            output = mod(output)
+
+        if self.norm is not None:
+            output = self.norm(output)
+
+        return output

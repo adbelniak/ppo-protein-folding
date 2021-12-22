@@ -1,3 +1,4 @@
+import argparse
 from collections import deque
 
 import gym
@@ -40,8 +41,17 @@ class TensorboardCallback(BaseCallback):
                 # self.logger.dump(step=self.num_timesteps)
         return True
 
-if __name__ == '__main__':
 
+def arg_parse():
+    parser = argparse.ArgumentParser(description='RL training')
+    parser.add_argument('--saving_directory', dest='saving_directory', action='store', type=str)
+
+    args = parser.parse_args()
+    return args
+
+
+if __name__ == '__main__':
+    args = arg_parse()
     env = DummyVecEnv([make_env('gym_rosetta:protein-fold-v0', i) for i in range(16)])
     # # env = gym.make('gym_rosetta:protein-fold-v0')
     n_timesteps = 1000000
@@ -52,3 +62,4 @@ if __name__ == '__main__':
     start_time = time.time()
     single_process_model.learn(n_timesteps, callback=TensorboardCallback(20))
     total_time_single = time.time() - start_time
+    single_process_model.save(args.saving_directory)
