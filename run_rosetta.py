@@ -52,9 +52,9 @@ def arg_parse():
 
 if __name__ == '__main__':
     args = arg_parse()
-    env = DummyVecEnv([make_env('gym_rosetta:protein-fold-v0', i) for i in range(16)])
+    env = DummyVecEnv([make_env('gym_rosetta:protein-fold-v0', i) for i in range(64)])
     # # env = gym.make('gym_rosetta:protein-fold-v0')
-    n_timesteps = 1000000
+    n_timesteps = 10000000
 
     single_process_model = PPO(ActorCriticTransformerPolicy, env,  verbose=1,
                                tensorboard_log='./logs',  n_steps=16, ent_coef=0.001)
