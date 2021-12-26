@@ -1,7 +1,7 @@
 import gym
 import torch
 import torch as th
-from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.maskable.policies import MaskableActorCriticPolicy
 from torch import nn, transpose, Tensor
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
