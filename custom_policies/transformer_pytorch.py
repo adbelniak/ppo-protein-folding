@@ -49,7 +49,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         super(CustomCombinedExtractor, self).__init__(observation_space, features_dim=1)
         embed_dim = 16
         num_heads = 2
-
+    
         self.pe = PositionalEncoding(embed_dim, 0, max_len=32)
 
         self.transformerEncoderLayer = TransformerEncoderLayer(embed_dim, num_heads, dim_feedforward=32)
@@ -57,7 +57,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         self.value_key = nn.Conv1d(observation_space['torsion_angles'].shape[1], embed_dim, (1,))
         self.query = nn.Embedding(len(RESIDUE_LETTERS) + 2 , embed_dim)
 
-        self._features_dim = 2*embed_dim * observation_space['torsion_angles'].shape[0] + 2
+        self._features_dim = embed_dim * observation_space['torsion_angles'].shape[0] + 2
 
     def forward(self, observations) -> th.Tensor:
 
@@ -68,7 +68,7 @@ class CustomCombinedExtractor(BaseFeaturesExtractor):
         embedded_seq = self.query(observations['amino_acid'].type(torch.IntTensor))
         embedded_angle = self.pe(embedded_angle)
         embedded_seq = self.pe(embedded_seq)
-        x = self.transformerEncoder(embedded_angle, embedded_seq, embedded_angle)
+        x = self.transformerEncoderLayer(embedded_angle, embedded_seq, embedded_angle)
         x = torch.nn.Flatten()(x)
         x = torch.cat((x, observations['energy'], observations['step']), dim=1)
         # Return a (B, self._features_dim) PyTorch tensor, where B is batch dimension.
