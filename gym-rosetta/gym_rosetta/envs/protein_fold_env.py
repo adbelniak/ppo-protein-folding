@@ -1,5 +1,7 @@
 import json
 import os, subprocess, time, signal
+from typing import List
+
 import gym
 from gym import error, spaces
 from gym import utils
@@ -74,6 +76,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.start_energy = 10000
         self.level_dir = 'protein_data/baseline'
         self.offset = 0
+        #input due to residue start from index 1 and first residue do not affect on distance
+        self.input_shift = 2
 
     def _configure_environment(self):
         """
@@ -94,13 +98,14 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         set_angle(residue_number, new_torsion_position)
 
     def _move(self, action):
+        #rosetta start count from 1, but first residue do not affect on distance
         self.move_counter += 1
-        residue_number = action[0] + 1
+        residue_number = action[0] +  self.input_shift
         torsion_number = action[1]
         move_pose_index = action[2]
         move_pose = ANGLE_MOVE[move_pose_index]
 
-        # bez =1 bo wpada w lokalne minimum - nie wplywa na distance
+        # bez < bo wpada w lokalne minimum - nie wplywa na distance
         if residue_number < self.total_current_residue:
             if torsion_number == 0:
                 self._move_on_torsion(residue_number, move_pose, self.protein_pose.phi,
@@ -229,7 +234,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             terminal_observation = {'terminal_observation': ob}
 
         return [ob, reward, self.done,
-                {"best": self.best_distance, "name": self.name, "start": self.start_distance, **terminal_observation }]
+                {"distance":distance, "best": self.best_distance, "name": self.name, "start": self.start_distance, **terminal_observation }]
 
     def set_default_pose(self, protein_pose):
         for i in range(1, protein_pose.total_residue() + 1):
@@ -240,6 +245,11 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
     # def add_harder_protein(self):
     #     copyfile('protein_data/additional/3fpo.pdb', 'protein_data/short/3fpo.pdb')
     #     print("COPIED")
+
+    def action_masks(self) -> List[bool]:
+        actions = np.ones(MAX_LENGTH - 1 + 2 + len(ANGLE_MOVE)) * True
+        actions[self.total_current_residue-self.input_shift:MAX_LENGTH-1] = False
+        return actions
 
     def _init_metrics(self):
         self.start_distance = self._get_distance(self.protein_pose, self.target_protein_pose)
