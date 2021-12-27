@@ -259,8 +259,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
     #     print("COPIED")
 
     def action_masks(self) -> List[bool]:
-        actions = np.ones(MAX_LENGTH - self.input_shift + 2 + len(ANGLE_MOVE)) * True
-        actions[self.total_current_residue-1:MAX_LENGTH-1] = False
+        actions = np.ones(MAX_LENGTH - 1 + 2 + len(ANGLE_MOVE)) * True
+        actions[self.total_current_residue-self.input_shift:MAX_LENGTH-1] = False
         return actions
 
     def _init_metrics(self):
