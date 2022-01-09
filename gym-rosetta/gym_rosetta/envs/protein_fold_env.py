@@ -277,8 +277,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         protein_directory = self.level_dir
         # if self.start_distance > self.best_distance:
         #     self.write_best_conformation(self.best_distance)
-        self.list_name = os.listdir(protein_directory)
-        self.name = np.random.choice(os.listdir(protein_directory))
+        protein_list = [protein for protein in os.listdir(protein_directory) if protein.endswith('.pdb')]
+        self.name = np.random.choice(protein_list)
         protein_path = os.path.join(protein_directory, self.name)
         self.target_protein_pose = ProteinFoldEnv._library.get_protein(protein_path)
         self.protein_pose = self.set_default_pose(self.target_protein_pose.clone())

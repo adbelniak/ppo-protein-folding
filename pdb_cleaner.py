@@ -23,7 +23,7 @@ def clean_protein_files(dir: str, out_dir: str, max_res):
             target_protein_pose = pose_from_pdb(os.path.join(out_dir, file))
 
             if target_protein_pose.total_residue() < 2 or target_protein_pose.total_residue() > max_res:
-                os.remove(os.path.join(dir, file))
+                os.remove(os.path.join(out_dir, file))
         except Exception as e:
             print(e)
             print("REMOVED demaged protein ", file)

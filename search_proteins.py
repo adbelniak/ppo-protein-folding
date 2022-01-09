@@ -1,7 +1,8 @@
 import requests
 import os
 import argparse
-
+from pyrosetta import init, pose_from_pdb, pose_from_sequence
+import pandas as pd
 from pdb_cleaner import clean_protein_files
 
 payload = {
@@ -124,9 +125,45 @@ def download_proteins(saving_directory, protein_name_list):
         open(os.path.join(saving_directory, protein_name.lower()), 'wb').write(r.content)
 
 
+def create_dataset_description(dataset_path, descr_file_path):
+    init()
+    protein_length_counter = {}
+    for protein_path in os.listdir(dataset_path):
+        if protein_path.endswith('.pdb'):
+            protein = pose_from_pdb(os.path.join(dataset_path, protein_path))
+            protein_length_counter[protein_path] = [protein.total_residue(), protein.sequence()]
+    protein_list_df = pd.DataFrame.from_dict(protein_length_counter, orient='index', columns=['residue_number', 'sequence'])
+    protein_list_df.index.rename('protein_name')
+    print(protein_list_df)
+    path_to_df = os.path.join(dataset_path, descr_file_path)
+    protein_list_df.to_csv(path_to_df, index_label='protein_name')
+    return protein_list_df
+
+
+def split_dataset(dataset_path, descr_file_path):
+    init()
+    path_to_df = os.path.join(dataset_path, descr_file_path)
+
+    if not os.path.isfile(path_to_df):
+        protein_list_df = create_dataset_description(dataset_path, descr_file_path)
+    else:
+        protein_list_df = pd.read_csv(path_to_df, index_col='protein_name')
+
+    train = protein_list_df.groupby('residue_number').sample(frac=0.85, random_state=0)
+    train.reset_index(inplace=True)
+    test = protein_list_df[~protein_list_df.index.isin(train['protein_name'])]
+    train.to_csv(os.path.join(dataset_path, 'train.csv'))
+    test.to_csv(os.path.join(dataset_path, 'test.csv'))
+
+def create_if_not_exists(dir_path):
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+
+
 def arg_parse():
     parser = argparse.ArgumentParser(description='Protein downloader.')
-    parser.add_argument('--saving_directory', dest='saving_directory', action='store', type=str)
+    parser.add_argument('--download_directory', dest='download_directory', action='store', default='protein_data/baseline_temp', type=str)
+    parser.add_argument('--dest_directory', dest='dest_directory', action='store', default='protein_data/baseline', type=str)
 
     args = parser.parse_args()
     return args
@@ -134,7 +171,14 @@ def arg_parse():
 
 if __name__ == '__main__':
     args = arg_parse()
+    descr_file_path = 'protein_info.csv'
+    create_if_not_exists(args.download_directory)
+    create_if_not_exists(args.dest_directory)
+
     protein_name_list = search_proteins()
     print(len(protein_name_list))
-    download_proteins(args.saving_directory, protein_name_list)
-    clean_protein_files('protein_data/baseline', 'protein_data/baseline', 17)
+
+    download_proteins(args.download_directory, protein_name_list)
+    clean_protein_files(args.download_directory, args.dest_directory, 17)
+    create_dataset_description(args.dest_directory, descr_file_path)
+    split_dataset(args.dest_directory, descr_file_path)
