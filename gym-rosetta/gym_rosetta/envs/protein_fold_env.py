@@ -115,7 +115,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
                                       self.protein_pose.set_psi)
             return 0.0
         else:
-            return -0.1
+            return -0.2
 
     def _get_residue_metric(self, resiude_pose, target_residue_pose):
         angle_distance = np.arctan2(np.sin(resiude_pose - target_residue_pose),

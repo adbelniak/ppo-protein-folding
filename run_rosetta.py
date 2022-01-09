@@ -59,16 +59,18 @@ def arg_parse():
 if __name__ == '__main__':
     args = arg_parse()
     env = DummyVecEnv([make_env('gym_rosetta:protein-fold-v0', i) for i in range(64)])
-    # # env = gym.make('gym_rosetta:protein-fold-v0')
     n_timesteps = 10000000
-
+    policy_kwargs = {
+        "features_extractor_kwargs": {
+            "embedding_dim": 16,
+            "num_heads": 2
+        }
+    }
     save_on_reward = SaveBestCallback(window_size=100, min_step=300000, min_step_freq=1000)
     save_on_distance = SaveOnBestDistance(window_size=100, min_step=500000, min_step_freq=1000)
 
     single_process_model = PPO(ActorCriticTransformerPolicy, env,  verbose=1,
-                               tensorboard_log='./logs',  n_steps=16, ent_coef=0.001)
+                               tensorboard_log='./logs',  n_steps=16, ent_coef=0.001, policy_kwargs=policy_kwargs)
 
-    start_time = time.time()
     single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance])
-    total_time_single = time.time() - start_time
     single_process_model.save(args.saving_directory)
