@@ -208,6 +208,9 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         amino = (action - angle - angles_move_len * torsion) / (angles_move_len * 2)
         return [amino, torsion, angle]
 
+    def _norm_energy(self, energy, start_energy, final_energy):
+        return (energy - final_energy) / (start_energy - final_energy)
+
     def step(self, action):
         self.done = False
         penalty = self._move(action)
@@ -219,22 +222,28 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
         if self.best_distance > distance:
             self.best_distance = distance
+        if energy < self.best_energy:
             self.best_energy = energy
+            self.norm_best_energy = self._norm_energy(energy, self.start_energy, self.conform_energy)
         terminal_observation = {}
 
         if distance < self.start_distance * 0.2:
             reward += 5
             self.done = True
-            terminal_observation = {'terminal_observation': ob}
 
         elif self.move_counter >= self.max_move_amount:
             print(self.name)
             reward += (self.start_distance - distance) / self.start_distance
             self.done = True
-            terminal_observation = {'terminal_observation': ob}
 
         return [ob, reward, self.done,
-                {"distance":distance, "best": self.best_distance, "name": self.name, "start": self.start_distance, **terminal_observation }]
+                {"distance":distance,
+                 "best": self.best_distance,
+                 "name": self.name,
+                 "start": self.start_distance,
+                 'best_energy': self.norm_best_energy,
+                 "final_distance": distance
+                }]
 
     def set_default_pose(self, protein_pose):
         for i in range(1, protein_pose.total_residue() + 1):
@@ -261,6 +270,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.best_energy = self.scorefxn(self.protein_pose)
         self.start_energy = self.scorefxn(self.protein_pose)
         self.prev_energy = self.scorefxn(self.protein_pose)
+        self.conform_energy = self.scorefxn(self.target_protein_pose)
+        self.norm_best_energy = 1
 
     def reset(self):
         protein_directory = self.level_dir
