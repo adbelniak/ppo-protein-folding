@@ -67,7 +67,7 @@ if __name__ == '__main__':
         }
     }
     save_on_reward = SaveBestCallback(window_size=100, min_step=300000, min_step_freq=1000)
-    save_on_distance = SaveOnBestDistance(window_size=100, min_step=500000, min_step_freq=1000)
+    save_on_distance = SaveOnBestDistance(window_size=100, min_step=500000, min_step_freq=1000, best_model_prefix='best_distance_model')
 
     single_process_model = PPO(ActorCriticTransformerPolicy, env,  verbose=1,
                                tensorboard_log='./logs',  n_steps=16, ent_coef=0.001, policy_kwargs=policy_kwargs)
