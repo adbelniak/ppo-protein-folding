@@ -38,8 +38,8 @@ if __name__ == '__main__':
     for exp_folder in os.listdir(experiments_dir):
         single_exp_path = os.path.join(experiments_dir, exp_folder)
         if os.path.isdir(single_exp_path):
-            for pref in experiments_dir:
-                best_model = best_model_from_path(single_exp_path, 'best_model')
+            for pref in model_prefixes:
+                best_model = best_model_from_path(single_exp_path, pref)
                 if best_model:
                     best_model_path = os.path.join(single_exp_path, best_model)
                     models_list.append(best_model_path)
