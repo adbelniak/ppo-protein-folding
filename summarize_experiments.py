@@ -42,6 +42,7 @@ if __name__ == '__main__':
                 best_model = best_model_from_path(single_exp_path, pref)
                 if best_model:
                     best_model_path = os.path.join(single_exp_path, best_model)
-                    models_list.append(best_model_path)
+                    models_list.append([best_model_path, single_exp_path.split('/')[-1]])
+                    # models_list.append(single_exp_path.split('/')[-1])
 
     pd.DataFrame(models_list).to_csv("models_to_download.csv")
