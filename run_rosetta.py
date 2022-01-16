@@ -38,7 +38,7 @@ class TensorboardCallback(BaseCallback):
         for info, done in zip(self.locals['infos'], self.locals['dones']):
             if done:
                 self.logger.record_mean('protein_distance/{}'.format(info['name']), info['best'])
-                self.logger.record_mean('protein_energy/{}'.format(info['name']), info['best_energy'])
+                # self.logger.record_mean('protein_energy/{}'.format(info['name']), info['best_energy'])
 
                 self.logger.record_mean('protein_distance_mean', info['best'] / info['start'])
                 self.logger.record_mean('protein_energy_mean', info['best_energy'])

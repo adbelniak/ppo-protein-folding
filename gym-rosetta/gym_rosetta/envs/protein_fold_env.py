@@ -232,8 +232,10 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             self.done = True
 
         elif self.move_counter >= self.max_move_amount:
-            print(self.name)
-            reward += (self.start_distance - distance) / self.start_distance
+            try:
+                reward += (self.start_distance - distance) / self.start_distance
+            except:
+                reward = 1
             self.done = True
 
         return [ob, reward, self.done,
@@ -242,7 +244,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
                  "name": self.name,
                  "start": self.start_distance,
                  'best_energy': self.norm_best_energy,
-                 "final_distance": distance
+                 "final_distance": distance,
+                 "current_energy": energy
                 }]
 
     def set_default_pose(self, protein_pose):
@@ -273,12 +276,15 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.conform_energy = self.scorefxn(self.target_protein_pose)
         self.norm_best_energy = 1
 
-    def reset(self):
+    def reset(self, protein_name=None):
         protein_directory = self.level_dir
         # if self.start_distance > self.best_distance:
         #     self.write_best_conformation(self.best_distance)
-        protein_list = [protein for protein in os.listdir(protein_directory) if protein.endswith('.pdb')]
-        self.name = np.random.choice(protein_list)
+        if protein_name is None:
+            protein_list = [protein for protein in os.listdir(protein_directory) if protein.endswith('.pdb')]
+            self.name = np.random.choice(protein_list)
+        else:
+            self.name = protein_name
         protein_path = os.path.join(protein_directory, self.name)
         self.target_protein_pose = ProteinFoldEnv._library.get_protein(protein_path)
         self.protein_pose = self.set_default_pose(self.target_protein_pose.clone())
