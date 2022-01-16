@@ -30,10 +30,18 @@ def best_model_from_path(experiment_dir, model_prefix):
     return models_list[-1]
 
 
-if __name__ == '__main__':
+def get_tf_logs_name(experiment_dir):
+    """Very ugly but i'm lazy :("""
+    for file in os.listdir(experiment_dir):
+        if not file.endswith('.zip'):
+            return file
+
+
+def create_models_list():
     experiments_dir = 'logs'
     model_prefixes = ['best_model', 'best_distance_model']
     models_list = []
+    tf_logs_list = []
 
     for exp_folder in os.listdir(experiments_dir):
         single_exp_path = os.path.join(experiments_dir, exp_folder)
@@ -45,4 +53,13 @@ if __name__ == '__main__':
                     models_list.append([best_model_path, single_exp_path.split('/')[-1]])
                     # models_list.append(single_exp_path.split('/')[-1])
 
+            tf_logs = get_tf_logs_name(single_exp_path)
+            tf_logs_list.append([os.path.join(single_exp_path, tf_logs), single_exp_path.split('/')[-1]])
     pd.DataFrame(models_list).to_csv("models_to_download.csv")
+    pd.DataFrame(tf_logs_list).to_csv("tf_logs_to_download.csv")
+
+
+if __name__ == '__main__':
+    experiments_dir = 'logs'
+    model_prefixes = ['best_model', 'best_distance_model']
+    create_models_list()
