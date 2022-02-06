@@ -32,9 +32,11 @@ def best_model_from_path(experiment_dir, model_prefix):
 
 def get_tf_logs_name(experiment_dir):
     """Very ugly but i'm lazy :("""
+    to_download = []
     for file in os.listdir(experiment_dir):
         if not file.endswith('.zip'):
-            return file
+            to_download.append(file)
+    return to_download
 
 
 def create_models_list():
@@ -53,8 +55,10 @@ def create_models_list():
                     models_list.append([best_model_path, single_exp_path.split('/')[-1]])
                     # models_list.append(single_exp_path.split('/')[-1])
 
-            tf_logs = get_tf_logs_name(single_exp_path)
-            tf_logs_list.append([os.path.join(single_exp_path, tf_logs), single_exp_path.split('/')[-1]])
+            # Save tf logs and csv file description
+            tf_logs_and_other = get_tf_logs_name(single_exp_path)
+            for files in tf_logs_and_other:
+                tf_logs_list.append([os.path.join(single_exp_path, files), single_exp_path.split('/')[-1]])
     pd.DataFrame(models_list).to_csv("models_to_download.csv")
     pd.DataFrame(tf_logs_list).to_csv("tf_logs_to_download.csv")
 
