@@ -6,10 +6,13 @@ from torch import nn
 from stable_baselines3.common.torch_layers import (
     BaseFeaturesExtractor,
 )
+from stable_baselines3.common.maskable.policies import MaskableActorCriticPolicy
+
 from stable_baselines3.common.type_aliases import Schedule
 from typing import Any, Dict, List, Optional, Type, Union
 
-from torch.nn import LayerNorm
+from torch.nn import LayerNorm, TransformerEncoderLayer as StandardTransformerEncoderLayer
+
 
 from custom_policies.transformer_encoder_layer import TransformerEncoderLayer, TransformerEncoder
 
@@ -24,7 +27,7 @@ RESIDUE_LETTERS = [
 ]
 
 class MultipleLayerExtractor(CustomCombinedExtractor):
-    def __init__(self, observation_space: gym.spaces.Dict, embedding_dim=16, num_heads=2, num_layers=2):
+    def __init__(self, observation_space: gym.spaces.Dict, embedding_dim=16, num_heads=2, num_layers=1):
         super(CustomCombinedExtractor, self).__init__(observation_space, features_dim=1)
         embed_dim = embedding_dim
         num_heads = num_heads
@@ -34,7 +37,7 @@ class MultipleLayerExtractor(CustomCombinedExtractor):
         self.transformerEncoderLayer = TransformerEncoderLayer(embed_dim, num_heads,
                                                                dim_feedforward=64)
 
-        self.transformerEncoderStandardLayer = TransformerEncoderLayer(
+        self.transformerEncoderStandardLayer = StandardTransformerEncoderLayer(
             embed_dim,
             num_heads, 32, 0,
             torch.nn.functional.relu,
@@ -53,7 +56,7 @@ class MultipleLayerExtractor(CustomCombinedExtractor):
         self._features_dim = embed_dim * observation_space['torsion_angles'].shape[0] + 2
 
 
-class ActorCriticTransformerMultipleLayersPolicy(ActorCriticPolicy):
+class ActorCriticTransformerMultipleLayersPolicy(MaskableActorCriticPolicy):
 
     def __init__(
         self,
@@ -63,12 +66,6 @@ class ActorCriticTransformerMultipleLayersPolicy(ActorCriticPolicy):
         net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
         activation_fn: Type[nn.Module] = nn.ReLU,
         ortho_init: bool = True,
-        use_sde: bool = False,
-        log_std_init: float = 0.0,
-        full_std: bool = True,
-        sde_net_arch: Optional[List[int]] = None,
-        use_expln: bool = False,
-        squash_output: bool = False,
         features_extractor_class: Type[BaseFeaturesExtractor] = MultipleLayerExtractor,
         features_extractor_kwargs: Optional[Dict[str, Any]] = None,
         normalize_images: bool = True,
@@ -82,12 +79,6 @@ class ActorCriticTransformerMultipleLayersPolicy(ActorCriticPolicy):
             net_arch,
             activation_fn,
             ortho_init,
-            use_sde,
-            log_std_init,
-            full_std,
-            sde_net_arch,
-            use_expln,
-            squash_output,
             features_extractor_class,
             features_extractor_kwargs,
             normalize_images,

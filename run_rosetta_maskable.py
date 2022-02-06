@@ -9,6 +9,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
 from custom_policies.transformer_maskable_pytorch import MaskableActorCriticTransformerPolicy
 from save_callbacks import SaveBestCallback, SaveOnBestDistance
+from custom_policies.transformer_multiple_layes_pytorch import ActorCriticTransformerMultipleLayersPolicy
 
 
 def make_env(env_id, rank, seed=0):
@@ -64,7 +65,7 @@ if __name__ == '__main__':
     save_on_reward = SaveBestCallback(window_size=100, min_step=500000, min_step_freq=1000)
     save_on_distance = SaveOnBestDistance(window_size=100, min_step=1000000, min_step_freq=1000, best_model_prefix='best_distance_model')
 
-    single_process_model = MaskablePPO(MaskableActorCriticTransformerPolicy, env,  verbose=1,
+    single_process_model = MaskablePPO(ActorCriticTransformerMultipleLayersPolicy, env,  verbose=1,
                                tensorboard_log='./logs',  n_steps=16, ent_coef=0.001, policy_kwargs=policy_kwargs)
 
     single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance])
