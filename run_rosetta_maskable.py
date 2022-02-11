@@ -14,7 +14,7 @@ from custom_policies.transformer_multiple_layes_pytorch import ActorCriticTransf
 
 def make_env(env_id, rank, seed=0, **kwargs):
     def _init():
-        env = gym.make(env_id, kwargs)
+        env = gym.make(env_id, **kwargs)
         env = Monitor(env)
         env.seed(seed + rank)
         return env
