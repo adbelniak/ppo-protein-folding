@@ -12,9 +12,9 @@ from save_callbacks import SaveBestCallback, SaveOnBestDistance
 from custom_policies.transformer_multiple_layes_pytorch import ActorCriticTransformerMultipleLayersPolicy
 
 
-def make_env(env_id, rank, seed=0):
+def make_env(env_id, rank, seed=0, **kwargs):
     def _init():
-        env = gym.make(env_id)
+        env = gym.make(env_id, kwargs)
         env = Monitor(env)
         env.seed(seed + rank)
         return env
@@ -51,10 +51,17 @@ def arg_parse():
     args = parser.parse_args()
     return args
 
+def environment_settings():
+    settings = {
+        "distance_reward_weight": 0.5
+    }
+    return settings
 
 if __name__ == '__main__':
     args = arg_parse()
-    env = DummyVecEnv([make_env('gym_rosetta:protein-fold-v0', i) for i in range(256)])
+    settings = environment_settings()
+
+    env = DummyVecEnv([make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(256)])
     n_timesteps = 10000000
     policy_kwargs = {
         "features_extractor_kwargs": {
@@ -62,10 +69,10 @@ if __name__ == '__main__':
             "num_heads": 2
         }
     }
-    save_on_reward = SaveBestCallback(window_size=100, min_step=500000, min_step_freq=1000)
-    save_on_distance = SaveOnBestDistance(window_size=100, min_step=1000000, min_step_freq=1000, best_model_prefix='best_distance_model')
+    save_on_reward = SaveBestCallback(window_size=500, min_step=500000, min_step_freq=1000)
+    save_on_distance = SaveOnBestDistance(window_size=500, min_step=1000000, min_step_freq=1000, best_model_prefix='best_distance_model')
 
-    single_process_model = MaskablePPO(ActorCriticTransformerMultipleLayersPolicy, env,  verbose=1,
+    single_process_model = MaskablePPO(MaskableActorCriticTransformerPolicy, env,  verbose=1,
                                tensorboard_log='./logs',  n_steps=16, ent_coef=0.001, policy_kwargs=policy_kwargs)
 
     single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance])

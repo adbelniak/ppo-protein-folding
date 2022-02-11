@@ -41,7 +41,15 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
     _library = ProteinLibrary()
 
-    def __init__(self, max_move_amount=64):
+    def __init__(
+        self,
+        max_move_amount=64,
+        level_dir=None,
+        distance_reward_weight=0.0,
+        abs_distance_reward_weight=0.0,
+        angle_reward_weight=0.0,
+        energy_reward_weight=0.0
+    ):
         super(ProteinFoldEnv, self).__init__()
         self.reward = 0.0
         self.prev_ca_rmsd = None
@@ -74,10 +82,14 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.best_energy = None
         self.prev_energy = None
         self.start_energy = 10000
-        self.level_dir = 'protein_data/baseline'
+        self.level_dir = level_dir or 'protein_data/baseline'
         self.offset = 0
         #input due to residue start from index 1 and first residue do not affect on distance
         self.input_shift = 2
+        self.distance_reward_weight = distance_reward_weight
+        self.abs_distance_reward_weight = abs_distance_reward_weight
+        self.angle_reward_weight = angle_reward_weight
+        self.energy_reward_weight = energy_reward_weight
 
     def _configure_environment(self):
         """
@@ -211,6 +223,30 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
     def _norm_energy(self, energy, start_energy, final_energy):
         return (energy - final_energy) / (start_energy - final_energy)
 
+    def get_distance_reward(self, current_distance):
+        reward = (self.prev_distance - current_distance) / self.start_distance
+        reward *= self.distance_reward_weight
+        self.prev_distance = current_distance
+        return reward
+
+    def get_best_distance_reward(self, current_distance):
+        reward = (self.best_distance - current_distance) / self.start_distance
+        reward *= self.abs_distance_reward_weight
+        self.best_distance = current_distance
+        return reward
+
+    def get_energy_reward(self, current_energy):
+        reward = (self.prev_energy - current_energy) / self.start_energy
+        reward *= self.energy_reward_weight
+        self.prev_energy = current_energy
+        return reward
+
+    def get_torsion_reward(self, current_energy):
+        reward = (self.prev_energy - current_energy) / self.start_energy
+        reward *= self.energy_reward_weight
+        self.prev_energy = current_energy
+        return reward
+
     def step(self, action):
         self.done = False
         penalty = self._move(action)
@@ -219,14 +255,17 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
         energy = self.scorefxn(self.protein_pose)
         distance = self._get_distance(self.protein_pose, self.target_protein_pose)
+        dist_reward = self.get_distance_reward(distance)
+        energy_reward = self.get_energy_reward(energy)
+        best_distance_rew = 0
 
         if self.best_distance > distance:
-            self.best_distance = distance
+            best_distance_rew = self.get_distance_reward(distance)
         if energy < self.best_energy:
             self.best_energy = energy
             self.norm_best_energy = self._norm_energy(energy, self.start_energy, self.conform_energy)
-        terminal_observation = {}
 
+        reward += (best_distance_rew + dist_reward + energy_reward)
         if distance < self.start_distance * 0.2:
             reward += 5
             self.done = True
@@ -277,6 +316,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.norm_best_energy = 1
 
     def reset(self, protein_name=None):
+        self.prev_residues_angle_distane = {}
+
         protein_directory = self.level_dir
         # if self.start_distance > self.best_distance:
         #     self.write_best_conformation(self.best_distance)
@@ -288,6 +329,9 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         protein_path = os.path.join(protein_directory, self.name)
         self.target_protein_pose = ProteinFoldEnv._library.get_protein(protein_path)
         self.protein_pose = self.set_default_pose(self.target_protein_pose.clone())
+        for i in range(1, self.target_protein_pose.total_residue()):
+            self.prev_residues_angle_distane[i * 2] = self.get_residue_distance(0, i)
+            self.prev_residues_angle_distane[i * 2 + 1] = self.get_residue_distance(1, i)
 
         self.move_counter = 0
         self.reward = 0.0
