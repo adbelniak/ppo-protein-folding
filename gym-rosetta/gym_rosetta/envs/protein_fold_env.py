@@ -195,7 +195,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             self.best_conformations_dict[self.name].append(distance)
 
     def get_prev_residue_distance(self, torsion, residue):
-        residue_number = residue + 1
+        residue_number = residue + self.input_shift
         prev_angle = self.prev_residues_angle[residue_number * 2 + torsion]
 
         if torsion == 0:
@@ -333,7 +333,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.conform_energy = self.scorefxn(self.target_protein_pose)
         self.norm_best_energy = 1
 
-        for i in range(1, self.target_protein_pose.total_residue()):
+        for i in range(1, self.target_protein_pose.total_residue()+1):
             self.prev_residues_angle[i * 2] = 180
             self.prev_residues_angle[i * 2 + 1] = 180
 
