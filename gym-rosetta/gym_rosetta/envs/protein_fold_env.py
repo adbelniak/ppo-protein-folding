@@ -260,7 +260,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         best_distance_rew = 0
 
         if self.best_distance > distance:
-            # best_distance_rew = self.get_distance_reward(distance)
+            best_distance_rew = self.get_best_distance_reward(distance)
             self.best_distance = distance
         if energy < self.best_energy:
             self.best_energy = energy
