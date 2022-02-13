@@ -102,7 +102,7 @@ class CurriculumCallback(BaseCallback):
 
     def init_level_generator(self):
         dirs = os.listdir('protein_data/benchmark')
-        dirs = [directory for directory in dirs if os.path.isdir(directory)]
+        dirs = [directory for directory in dirs if os.path.isdir(os.path.join('protein_data/benchmark', directory))]
         dirs.sort(key=natural_keys)
         levels = [os.path.join('benchmark', x) for x in dirs]
         self.level_generator = (x for x in levels)
