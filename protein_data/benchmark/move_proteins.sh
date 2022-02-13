@@ -1,0 +1,13 @@
+cp short_3/6v4i.pdb short_4/6v4i.pdb
+cp short_4/5zck.pdb short_5/5zck.pdb
+cp short_4/6ben.pdb short_5/6ben.pdb
+cp short_5/6be7.pdb short_6/6be7.pdb
+cp short_5/7l9d.pdb short_6/7l9d.pdb
+cp short_6/5txd.pdb short_7/5txd.pdb
+cp short_6/5olf.pdb short_7/5olf.pdb
+cp short_7/4rp6.pdb short_8/4rp6.pdb
+cp short_7/6beu.pdb short_8/6beu.pdb
+cp short_8/1oeh.pdb short_9/1oeh.pdb
+cp short_8/6bxv.pdb short_9/6bxv.pdb
+cp short_9/2mk7.pdb short_10/2mk7.pdb
+cp short_9/6nk4.pdb short_10/6nk4.pdb
