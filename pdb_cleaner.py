@@ -30,16 +30,18 @@ def clean_protein_files(dir: str, out_dir: str, max_res):
             os.remove(os.path.join(dir, file))
             pass
 
-def sort_pdbs(dir: str):
-    for x in range(2, 7):
-        if not os.path.exists('protein_data/short_' + str(x)):
-            os.makedirs('protein_data/short_' + str(x))
-    for file in os.listdir(dir):
-        target_protein_pose = pose_from_pdb(os.path.join(dir, file))
-        dir_to_move = 'short_' + str(target_protein_pose.total_residue())
-        copyfile(os.path.join(dir, file), os.path.join('protein_data', dir_to_move, file))
+
+def sort_pdbs(src:dir, dir: str):
+    for x in range(3, 17):
+        if not os.path.exists(f'{dir}/short_' + str(x)):
+            os.makedirs(f'{dir}/short_' + str(x))
+    for file in os.listdir(src):
+        if file.endswith('.pdb'):
+            target_protein_pose = pose_from_pdb(os.path.join(src, file))
+            dir_to_move = 'short_' + str(target_protein_pose.total_residue())
+            copyfile(os.path.join(src, file), os.path.join(dir, dir_to_move, file))
 
 
 if __name__ == '__main__':
     # clean_protein_files('protein_data/6_length', 'protein_data/short_valid')
-    sort_pdbs('protein_data/6_length')
+    sort_pdbs('protein_data/baseline', 'protein_data/benchmark')

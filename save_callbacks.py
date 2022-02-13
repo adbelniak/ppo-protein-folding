@@ -1,9 +1,13 @@
 import os
+import re
 from collections import deque
+
+import numpy as np
 import pandas as pd
 from stable_baselines3.common.callbacks import BaseCallback
 
 from stable_baselines3.common.utils import safe_mean
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 class SaveBestCallback(BaseCallback):
@@ -62,3 +66,82 @@ class SaveOnBestDistance(SaveBestCallback):
     def _add_metric(self, info):
         distance = info['best'] / info['start']
         self.metric_buffer.append(distance)
+
+
+def atoi(text):
+    return int(text) if text.isdigit() else text
+
+def natural_keys(text):
+    '''
+    alist.sort(key=natural_keys) sorts in human order
+    http://nedbatchelder.com/blog/200712/human_sorting.html
+    (See Toothy's implementation in the comments)
+    '''
+    return [ atoi(c) for c in re.split(r'(\d+)', text) ]
+
+
+class CurriculumCallback(BaseCallback):
+    def __init__(
+        self,
+        threshold_increase: float = 0.3,
+        window_size:int = 500,
+        envs: DummyVecEnv = None,
+        verbose: int = 0
+    ):
+        super(CurriculumCallback, self).__init__(verbose=verbose)
+        self.average_progress = deque(maxlen=window_size)
+        self.probes_to_account = window_size
+        self.init_level_generator()
+        self.dummyVecEnv = envs
+        self.threshold_increase = threshold_increase
+        self.best_df = []
+        self.current_level = None
+        self.min_step=10000
+        self.best_model_prefix = 'curriculum_distance'
+        self._increase_level(False)
+
+    def init_level_generator(self):
+        dirs = os.listdir('protein_data/benchmark')
+        dirs.sort(key=natural_keys)
+        levels = [os.path.join('benchmark', x) for x in dirs]
+        self.level_generator = (x for x in levels)
+
+    def _append_distance_result(self, best_distance, start_distance):
+        norm_distance = best_distance / start_distance
+        self.average_progress.append(norm_distance)
+
+    def _increase_level(self, save_model=True):
+        level_folder = next(self.level_generator)
+        self.current_level = level_folder
+        for env in self.dummyVecEnv.envs:
+            env.set_level(level_folder)
+        self.average_progress = deque(maxlen=self.probes_to_account)
+        if save_model:
+            path = os.path.join(self.model.logger.dir,
+                                f"{self.best_model_prefix}_{self.num_timesteps}_steps")
+            self.model.save(path)
+            df = pd.DataFrame(self.best_df)
+            path = os.path.join(self.model.logger.dir,
+                                f"{self.best_model_prefix}_description.csv")
+            df.to_csv(path)
+
+    def _add_metric(self, info):
+        distance = info['best'] / info['start']
+        self.average_progress.append(distance)
+
+    def _on_step(self) -> bool:
+        for info, done in zip(self.locals['infos'], self.locals['dones']):
+            if done:
+                self._add_metric(info)
+
+        not_too_early = self.min_step < self.num_timesteps
+        filled_buffer = len(self.average_progress) >= self.probes_to_account
+
+        if not_too_early and filled_buffer and np.mean(self.average_progress) < self.threshold_increase:
+            self._increase_level()
+            self.dummyVecEnv.reset()
+            print("Next Level: {}".format(self.current_level))
+
+            self.best_df.append({"level": self.current_level, "num_timesteps": self.num_timesteps})
+
+        return True
