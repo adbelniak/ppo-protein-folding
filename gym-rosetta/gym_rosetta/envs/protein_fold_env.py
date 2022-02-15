@@ -90,6 +90,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.abs_distance_reward_weight = abs_distance_reward_weight
         self.angle_reward_weight = angle_reward_weight
         self.energy_reward_weight = energy_reward_weight
+        self.goal_delta = 0.2
 
     def _configure_environment(self):
         """
@@ -284,7 +285,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
             self.norm_best_energy = self._norm_energy(energy, self.start_energy, self.conform_energy)
 
         reward += (best_distance_rew + dist_reward + energy_reward + torsion_reward)
-        if distance < self.start_distance * 0.2:
+        if distance < self.start_distance * self.goal_delta:
             reward += 5
             self.done = True
 
@@ -388,9 +389,5 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
     def set_level(self, level_sub_dir):
         self.level_dir = os.path.join('protein_data', level_sub_dir)
 
-
-if __name__ == '__main__':
-    env = ProteinFoldEnv()
-    env.reset()
-    a = 5
-    test = 'tt'
+    def set_level_delta_goal(self, goal_delta):
+        self.goal_delta = goal_delta
