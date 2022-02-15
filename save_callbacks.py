@@ -156,7 +156,6 @@ class CurriculumDistanceCallback(CurriculumCallback):
         super(CurriculumDistanceCallback, self).__init__(**kwargs)
         self.threshold_delta = threshold_delta
         self.best_model_prefix = 'curriculum_distance_reduction'
-        self._increase_level(False)
 
     def init_level_generator(self):
         levels = np.arange(0.9, 0.05, -self.step_distance_level)
