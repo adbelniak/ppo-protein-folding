@@ -167,6 +167,7 @@ class CurriculumDistanceCallback(CurriculumCallback):
         for env in self.dummyVecEnv.envs:
             env.set_level_delta_goal(level_folder)
         self.average_progress = deque(maxlen=self.probes_to_account)
+        self.best_df.append({"level": self.current_level, "num_timesteps": self.num_timesteps})
         if save_model:
             path = os.path.join(self.model.logger.dir,
                                 f"{self.best_model_prefix}_{self.num_timesteps}_steps")
@@ -193,7 +194,4 @@ class CurriculumDistanceCallback(CurriculumCallback):
             self._increase_level()
             self.dummyVecEnv.reset()
             print("Next Level: {}".format(self.current_level))
-
-            self.best_df.append({"level": self.current_level, "num_timesteps": self.num_timesteps})
-
         return True
