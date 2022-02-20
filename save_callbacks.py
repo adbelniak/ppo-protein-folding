@@ -231,6 +231,10 @@ class CurriculumScrambleCallback(CurriculumCallback):
                                 f"{self.best_model_prefix}_description.csv")
             df.to_csv(path)
 
+    def _add_metric(self, info):
+        distance = info['best'] / info['start']
+        self.average_progress.append(distance)
+
     def _on_step(self) -> bool:
         for info, done in zip(self.locals['infos'], self.locals['dones']):
             if done:
@@ -238,7 +242,7 @@ class CurriculumScrambleCallback(CurriculumCallback):
 
         not_too_early = self.min_step < self.num_timesteps
         filled_buffer = len(self.average_progress) >= self.probes_to_account
-        exceed_level = np.mean(self.average_progress) < (self.current_level + self.threshold_delta)
+        exceed_level = np.mean(self.average_progress) < self.threshold_delta
 
         if not_too_early and filled_buffer and exceed_level:
             self._increase_level()
