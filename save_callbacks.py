@@ -212,7 +212,7 @@ class CurriculumScrambleCallback(CurriculumCallback):
         self.start_value = start_value
 
     def init_level_generator(self):
-        levels = np.arange(0.9, -self.step_distance_level, -self.step_distance_level)
+        levels = np.arange(self.start_value, -self.step_distance_level, -self.step_distance_level)
         self.level_generator = (x for x in levels)
 
     def _increase_level(self, save_model=True):
