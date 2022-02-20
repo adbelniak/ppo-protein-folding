@@ -206,10 +206,10 @@ class CurriculumScrambleCallback(CurriculumCallback):
         **kwargs
     ):
         self.step_distance_level = step_distance_level
+        self.start_value = start_value
         super(CurriculumScrambleCallback, self).__init__(**kwargs)
         self.threshold_delta = threshold_delta
         self.best_model_prefix = 'curriculum_scramble_reduction'
-        self.start_value = start_value
 
     def init_level_generator(self):
         levels = np.arange(self.start_value, -self.step_distance_level, -self.step_distance_level)
