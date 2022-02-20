@@ -376,9 +376,12 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         mask = mask > beta
         for x, residue in zip(mask, range(pose.total_residue() + 1)):
             if x:
-                noise = 180 - np.random.rand(2) * 360
-                pose.set_psi(residue + 1, noise[0])
-                pose.set_phi(residue + 1, noise[1])
+                noise = (180 - np.random.rand(2) * 360)
+                noise *= (1 - beta)
+                new_psi = normalize(pose.psi(residue + 1) + noise[0], -180, 180)
+                new_phi = normalize(pose.phi(residue + 1) + noise[1], -180, 180)
+                pose.set_psi(residue + 1, new_psi)
+                pose.set_phi(residue + 1, new_phi)
         return pose
 
     def difference_energy(self):
