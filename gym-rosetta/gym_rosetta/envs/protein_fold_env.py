@@ -48,7 +48,8 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         distance_reward_weight=0.0,
         abs_distance_reward_weight=0.0,
         angle_reward_weight=0.0,
-        energy_reward_weight=0.0
+        energy_reward_weight=0.0,
+        goal_delta=0.3
     ):
         super(ProteinFoldEnv, self).__init__()
         self.reward = 0.0
@@ -90,7 +91,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         self.abs_distance_reward_weight = abs_distance_reward_weight
         self.angle_reward_weight = angle_reward_weight
         self.energy_reward_weight = energy_reward_weight
-        self.goal_delta = 0.2
+        self.goal_delta = goal_delta
 
     def _configure_environment(self):
         """
@@ -211,15 +212,19 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
     def get_residue_distance(self, torsion, residue):
         residue_number = residue + self.input_shift
-        if torsion == 0:
-            current = self.protein_pose.phi(residue_number)
-            target = self.target_protein_pose.phi(residue_number)
+        try:
+            if torsion == 0:
+                current = self.protein_pose.phi(residue_number)
+                target = self.target_protein_pose.phi(residue_number)
 
-        else:
-            current = self.protein_pose.psi(residue_number)
-            target = self.target_protein_pose.psi(residue_number)
-        angle_distance = self._get_residue_metric(np.radians(current), np.radians(target))
-        return angle_distance / np.pi
+            else:
+                current = self.protein_pose.psi(residue_number)
+                target = self.target_protein_pose.psi(residue_number)
+            angle_distance = self._get_residue_metric(np.radians(current), np.radians(target))
+            return angle_distance / np.pi
+        except:
+            print(self.name)
+            raise Exception
 
     def _get_action_mask(self):
         offset = np.zeros(self.offset)
@@ -303,7 +308,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
                  "start": self.start_distance,
                  'best_energy': self.norm_best_energy,
                  "final_distance": distance,
-                 "current_energy": energy
+                 "current_energy": energy,
                 }]
 
     def set_default_pose(self, protein_pose):
@@ -363,17 +368,17 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         # mask = self._get_action_mask()
         self._init_metrics()
         self.total_current_residue = self.protein_pose.total_residue()
+        self.protein_pose = self.scramble_pose(self.target_protein_pose.clone(), self.beta)
         return self._get_state()
 
-    def scramble_pose(self, pose):
-        if np.random.rand() > 0.4:
-            mask = np.random.rand(pose.total_residue())
-            mask = mask > 0.4
-            for x, residue in zip(mask, range(pose.total_residue() + 1)):
-                if x:
-                    noise = np.random.rand(2) * 25
-                    pose.set_psi(residue + 1, self.target_protein_pose.psi(residue + 1) + noise[0])
-                    pose.set_phi(residue + 1, self.target_protein_pose.phi(residue + 1) + noise[1])
+    def scramble_pose(self, pose, beta):
+        mask = np.random.rand(pose.total_residue())
+        mask = mask > beta
+        for x, residue in zip(mask, range(pose.total_residue() + 1)):
+            if x:
+                noise = 180 - np.random.rand(2) * 360
+                pose.set_psi(residue + 1, noise[0])
+                pose.set_phi(residue + 1, noise[1])
         return pose
 
     def difference_energy(self):
@@ -391,3 +396,6 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
 
     def set_level_delta_goal(self, goal_delta):
         self.goal_delta = goal_delta
+
+    def set_level_beta_scramble(self, beta):
+        self.beta = beta

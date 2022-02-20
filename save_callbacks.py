@@ -195,3 +195,53 @@ class CurriculumDistanceCallback(CurriculumCallback):
             self.dummyVecEnv.reset()
             print("Next Level: {}".format(self.current_level))
         return True
+
+
+class CurriculumScrambleCallback(CurriculumCallback):
+    def __init__(
+        self,
+        threshold_delta: float = 0.1,
+        step_distance_level: float = 0.05,
+        start_value: float = 0.9,
+        **kwargs
+    ):
+        self.step_distance_level = step_distance_level
+        super(CurriculumScrambleCallback, self).__init__(**kwargs)
+        self.threshold_delta = threshold_delta
+        self.best_model_prefix = 'curriculum_scramble_reduction'
+        self.start_value = start_value
+
+    def init_level_generator(self):
+        levels = np.arange(0.9, -self.step_distance_level, -self.step_distance_level)
+        self.level_generator = (x for x in levels)
+
+    def _increase_level(self, save_model=True):
+        level_folder = next(self.level_generator)
+        self.current_level = level_folder
+        for env in self.dummyVecEnv.envs:
+            env.set_level_beta_scramble(level_folder)
+        self.average_progress = deque(maxlen=self.probes_to_account)
+        self.best_df.append({"level": self.current_level, "num_timesteps": self.num_timesteps})
+        if save_model:
+            path = os.path.join(self.model.logger.dir,
+                                f"{self.best_model_prefix}_{self.num_timesteps}_steps")
+            self.model.save(path)
+            df = pd.DataFrame(self.best_df)
+            path = os.path.join(self.model.logger.dir,
+                                f"{self.best_model_prefix}_description.csv")
+            df.to_csv(path)
+
+    def _on_step(self) -> bool:
+        for info, done in zip(self.locals['infos'], self.locals['dones']):
+            if done:
+                self._add_metric(info)
+
+        not_too_early = self.min_step < self.num_timesteps
+        filled_buffer = len(self.average_progress) >= self.probes_to_account
+        exceed_level = np.mean(self.average_progress) < (self.current_level + self.threshold_delta)
+
+        if not_too_early and filled_buffer and exceed_level:
+            self._increase_level()
+            self.dummyVecEnv.reset()
+            print("Next Level: {}".format(self.current_level))
+        return True
