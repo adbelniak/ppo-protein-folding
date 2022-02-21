@@ -164,10 +164,14 @@ class CurriculumDistanceCallback(CurriculumCallback):
         self.level_generator = (x for x in levels)
 
     def _increase_level(self, save_model=True):
-        level_folder = next(self.level_generator)
-        self.current_level = level_folder
+        try:
+            level_folder = next(self.level_generator)
+            self.current_level = level_folder
+        except:
+            pass
+
         for env in self.dummyVecEnv.envs:
-            env.set_level_delta_goal(level_folder)
+            env.set_level_delta_goal(self.current_level)
         self.average_progress = deque(maxlen=self.probes_to_account)
         self.best_df.append({"level": self.current_level, "num_timesteps": self.num_timesteps})
         self.step_in_level = 0
