@@ -7,6 +7,9 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
+
+from custom_policies.transformer_joint_input_encoder_pytorch import \
+    ActorCriticTransformerJointInputPolicy
 from custom_policies.transformer_maskable_pytorch import MaskableActorCriticTransformerPolicy
 from save_callbacks import SaveBestCallback, SaveOnBestDistance, CurriculumCallback, CurriculumScrambleCallback
 from custom_policies.transformer_multiple_layes_pytorch import ActorCriticTransformerMultipleLayersPolicy
@@ -77,7 +80,7 @@ if __name__ == '__main__':
         envs=env, min_step=100000, start_value=0.9
     )
 
-    single_process_model = MaskablePPO(MaskableActorCriticTransformerPolicy, env,  verbose=1,
+    single_process_model = MaskablePPO(ActorCriticTransformerJointInputPolicy, env,  verbose=1, clip_range=0.1,
                                tensorboard_log='./logs',  n_steps=32, ent_coef=0.001, policy_kwargs=policy_kwargs)
 
     single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance, curriculum_calback])
