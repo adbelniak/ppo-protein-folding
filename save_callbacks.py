@@ -193,6 +193,7 @@ class CurriculumDistanceCallback(CurriculumCallback):
             if done:
                 self._add_metric(info)
 
+        self.step_in_level += len(self.locals['infos'])
         not_too_early = self.min_step < self.num_timesteps
         filled_buffer = len(self.average_progress) >= self.probes_to_account
         exceed_level = np.mean(self.average_progress) < (self.current_level + self.threshold_delta)
