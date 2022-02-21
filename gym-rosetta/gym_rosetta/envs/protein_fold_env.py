@@ -368,7 +368,7 @@ class ProteinFoldEnv(gym.Env, utils.EzPickle):
         # mask = self._get_action_mask()
         self._init_metrics()
         self.total_current_residue = self.protein_pose.total_residue()
-        self.protein_pose = self.scramble_pose(self.target_protein_pose.clone(), self.beta)
+        # self.protein_pose = self.scramble_pose(self.target_protein_pose.clone(), self.beta)
         return self._get_state()
 
     def scramble_pose(self, pose, beta):

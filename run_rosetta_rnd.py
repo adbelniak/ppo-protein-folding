@@ -6,6 +6,8 @@ import gym
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import DummyVecEnv
+from vec_curiosity_rnd import CuriosityWrapper
+
 from stable_baselines3.common.monitor import Monitor
 from custom_policies.transformer_maskable_pytorch import MaskableActorCriticTransformerPolicy
 from save_callbacks import SaveBestCallback, SaveOnBestDistance, CurriculumCallback, CurriculumScrambleCallback
@@ -54,7 +56,7 @@ def arg_parse():
 def environment_settings():
     settings = {
         "distance_reward_weight": 0.0,
-        'goal_delta': 0.1
+        'goal_delta': 0.3
     }
     return settings
 
@@ -62,7 +64,7 @@ if __name__ == '__main__':
     args = arg_parse()
     settings = environment_settings()
 
-    env = DummyVecEnv([make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(256)])
+    env = CuriosityWrapper([make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(256)])
     n_timesteps = 10000000
     policy_kwargs = {
         "features_extractor_kwargs": {
@@ -72,13 +74,9 @@ if __name__ == '__main__':
     }
     save_on_reward = SaveBestCallback(window_size=500, min_step=500000, min_step_freq=1000)
     save_on_distance = SaveOnBestDistance(window_size=500, min_step=1000000, min_step_freq=1000, best_model_prefix='best_distance_model')
-    curriculum_calback = CurriculumScrambleCallback(
-        threshold_delta=0.05 + settings['goal_delta'], step_distance_level=0.05, window_size=10000,
-        envs=env, min_step=100000, start_value=0.95
-    )
 
     single_process_model = MaskablePPO(MaskableActorCriticTransformerPolicy, env,  verbose=1,
                                tensorboard_log='./logs',  n_steps=32, ent_coef=0.001, policy_kwargs=policy_kwargs)
 
-    single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance, curriculum_calback])
+    single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance])
     single_process_model.save(args.saving_directory)
