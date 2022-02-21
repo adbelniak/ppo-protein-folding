@@ -168,7 +168,7 @@ class CurriculumDistanceCallback(CurriculumCallback):
             level_folder = next(self.level_generator)
             self.current_level = level_folder
         except:
-            pass
+            return False
 
         for env in self.dummyVecEnv.envs:
             env.set_level_delta_goal(self.current_level)
@@ -183,6 +183,7 @@ class CurriculumDistanceCallback(CurriculumCallback):
             path = os.path.join(self.model.logger.dir,
                                 f"{self.best_model_prefix}_description.csv")
             df.to_csv(path)
+        return True
 
     def _add_metric(self, info):
         distance = info['best'] / info['start']
@@ -199,7 +200,8 @@ class CurriculumDistanceCallback(CurriculumCallback):
         exceed_level = np.mean(self.average_progress) < (self.current_level + self.threshold_delta)
         force_increase = self.step_to_increase < self.step_in_level
         if (not_too_early and filled_buffer and exceed_level) or force_increase:
-            self._increase_level()
-            self.dummyVecEnv.reset()
-            print("Next Level: {}".format(self.current_level))
+            was_increased = self._increase_level()
+            if was_increased:
+                self.dummyVecEnv.reset()
+                print("Next Level: {}".format(self.current_level))
         return True
