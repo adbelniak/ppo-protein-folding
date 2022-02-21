@@ -153,10 +153,10 @@ class CurriculumDistanceCallback(CurriculumCallback):
         **kwargs
     ):
         self.step_distance_level = step_distance_level
+        self.step_in_level = 0
         super(CurriculumDistanceCallback, self).__init__(**kwargs)
         self.threshold_delta = threshold_delta
         self.best_model_prefix = 'curriculum_distance_reduction'
-        self.step_in_level = 0
         self.step_to_increase = 500000
 
     def init_level_generator(self):
@@ -212,11 +212,11 @@ class CurriculumScrambleCallback(CurriculumCallback):
     ):
         self.step_distance_level = step_distance_level
         self.start_value = start_value
+        self.step_in_level = 0
         super(CurriculumScrambleCallback, self).__init__(**kwargs)
         self.threshold_delta = threshold_delta
         self.best_model_prefix = 'curriculum_scramble_reduction'
         self.step_to_increase = step_to_increase
-        self.step_in_level = 0
 
     def init_level_generator(self):
         levels = np.arange(self.start_value, -self.step_distance_level, -self.step_distance_level)
@@ -232,7 +232,6 @@ class CurriculumScrambleCallback(CurriculumCallback):
         for env in self.dummyVecEnv.envs:
             env.set_level_beta_scramble(self.current_level)
 
-        self.step_in_level += len(self.locals['infos'])
         self.average_progress = deque(maxlen=self.probes_to_account)
         self.best_df.append({"level": self.current_level, "num_timesteps": self.num_timesteps})
         self.step_in_level = 0
