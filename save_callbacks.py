@@ -189,6 +189,7 @@ class CurriculumDistanceCallback(CurriculumCallback):
             if done:
                 self._add_metric(info)
 
+        self.step_in_level += len(self.locals['infos'])
         not_too_early = self.min_step < self.num_timesteps
         filled_buffer = len(self.average_progress) >= self.probes_to_account
         exceed_level = np.mean(self.average_progress) < (self.current_level + self.threshold_delta)
@@ -206,6 +207,7 @@ class CurriculumScrambleCallback(CurriculumCallback):
         threshold_delta: float = 0.1,
         step_distance_level: float = 0.05,
         start_value: float = 0.9,
+        step_to_increase: int = 500000,
         **kwargs
     ):
         self.step_distance_level = step_distance_level
@@ -213,17 +215,24 @@ class CurriculumScrambleCallback(CurriculumCallback):
         super(CurriculumScrambleCallback, self).__init__(**kwargs)
         self.threshold_delta = threshold_delta
         self.best_model_prefix = 'curriculum_scramble_reduction'
-        self.step_to_increase = 500000
+        self.step_to_increase = step_to_increase
+        self.step_in_level = 0
 
     def init_level_generator(self):
         levels = np.arange(self.start_value, -self.step_distance_level, -self.step_distance_level)
         self.level_generator = (x for x in levels)
 
     def _increase_level(self, save_model=True):
-        level_folder = next(self.level_generator)
-        self.current_level = level_folder
+        try:
+            level_folder = next(self.level_generator)
+            self.current_level = level_folder
+        except:
+            return
+
         for env in self.dummyVecEnv.envs:
-            env.set_level_beta_scramble(level_folder)
+            env.set_level_beta_scramble(self.current_level)
+
+        self.step_in_level += len(self.locals['infos'])
         self.average_progress = deque(maxlen=self.probes_to_account)
         self.best_df.append({"level": self.current_level, "num_timesteps": self.num_timesteps})
         self.step_in_level = 0
@@ -245,6 +254,7 @@ class CurriculumScrambleCallback(CurriculumCallback):
             if done:
                 self._add_metric(info)
 
+        self.step_in_level += len(self.locals['infos'])
         not_too_early = self.min_step < self.num_timesteps
         filled_buffer = len(self.average_progress) >= self.probes_to_account
         exceed_level = np.mean(self.average_progress) < self.threshold_delta
