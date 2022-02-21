@@ -150,6 +150,7 @@ class CurriculumDistanceCallback(CurriculumCallback):
         self,
         threshold_delta: float = 0.1,
         step_distance_level: float = 0.05,
+        step_to_increase: int = 500000,
         **kwargs
     ):
         self.step_distance_level = step_distance_level
@@ -157,7 +158,7 @@ class CurriculumDistanceCallback(CurriculumCallback):
         self.threshold_delta = threshold_delta
         self.best_model_prefix = 'curriculum_distance_reduction'
         self.step_in_level = 0
-        self.step_to_increase = 500000
+        self.step_to_increase = step_to_increase
 
     def init_level_generator(self):
         levels = np.arange(0.9, 0.05, -self.step_distance_level)

@@ -73,6 +73,7 @@ if __name__ == '__main__':
     save_on_reward = SaveBestCallback(window_size=500, min_step=500000, min_step_freq=1000)
     save_on_distance = SaveOnBestDistance(window_size=500, min_step=1000000, min_step_freq=1000, best_model_prefix='best_distance_model')
     curriculum_calback = CurriculumDistanceCallback(threshold_delta=0.1,step_distance_level=0.05,
+                                                    step_to_increase=500000,
                                                     window_size=10000, min_step=100000, envs=env)
 
     single_process_model = MaskablePPO(MaskableActorCriticTransformerPolicy, env,  verbose=1,
