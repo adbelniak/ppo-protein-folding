@@ -208,11 +208,13 @@ class CurriculumScrambleCallback(CurriculumCallback):
         step_distance_level: float = 0.05,
         start_value: float = 0.9,
         step_to_increase: int = 500000,
+        not_to_early_threshold: int = 100000,
         **kwargs
     ):
         self.step_distance_level = step_distance_level
         self.start_value = start_value
         self.step_in_level = 0
+        self.not_to_early_threshold = not_to_early_threshold
         super(CurriculumScrambleCallback, self).__init__(**kwargs)
         self.threshold_delta = threshold_delta
         self.best_model_prefix = 'curriculum_scramble_reduction'
@@ -258,7 +260,9 @@ class CurriculumScrambleCallback(CurriculumCallback):
         filled_buffer = len(self.average_progress) >= self.probes_to_account
         exceed_level = np.mean(self.average_progress) < self.threshold_delta
         force_increase = self.step_to_increase < self.step_in_level
-        if (not_too_early and filled_buffer and exceed_level) or force_increase:
+        not_to_early_local = self.not_to_early_threshold < self.step_in_level
+
+        if (not_too_early and filled_buffer and exceed_level and not_to_early_local) or force_increase:
             self._increase_level()
             self.dummyVecEnv.reset()
             print("Next Level: {}".format(self.current_level))

@@ -77,7 +77,7 @@ if __name__ == '__main__':
     save_on_distance = SaveOnBestDistance(window_size=500, min_step=1000000, min_step_freq=1000, best_model_prefix='best_distance_model')
     curriculum_calback = CurriculumScrambleCallback(
         threshold_delta=0.05 + settings['goal_delta'], step_distance_level=0.05, window_size=10000,
-        envs=env, min_step=100000, start_value=0.9
+        envs=env, min_step=100000, start_value=0.95, not_to_early_local=100000
     )
 
     single_process_model = MaskablePPO(ActorCriticTransformerJointInputPolicy, env,  verbose=1, clip_range=0.1,
