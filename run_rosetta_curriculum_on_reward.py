@@ -81,7 +81,7 @@ if __name__ == '__main__':
         envs=env, min_step=100000, start_value=0.75, not_to_early_threshold=60000, step_to_increase=2000000
     )
 
-    single_process_model = MaskablePPO(ActorCriticTransformerJointInputPolicy, env,  verbose=1, clip_range=0.1,
+    single_process_model = MaskablePPO(MaskableActorCriticTransformerPolicy, env,  verbose=1,
                                tensorboard_log='./logs',  n_steps=32, ent_coef=0.001, policy_kwargs=policy_kwargs)
 
     single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance, curriculum_calback])
