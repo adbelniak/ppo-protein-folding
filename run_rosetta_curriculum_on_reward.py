@@ -58,7 +58,7 @@ def arg_parse():
 def environment_settings():
     settings = {
         "distance_reward_weight": 0.0,
-        'goal_delta': 0.1
+        'goal_delta': 0.2
     }
     return settings
 
