@@ -267,3 +267,26 @@ class CurriculumScrambleCallback(CurriculumCallback):
             self.dummyVecEnv.reset()
             print("Next Level: {}".format(self.current_level))
         return True
+
+class CurriculumScrambleCallbackOnReward(CurriculumScrambleCallback):
+    def _add_metric(self, reward):
+        # distance = info
+        self.average_progress.append(reward)
+
+    def _on_step(self) -> bool:
+        for reward, done in zip(self.locals['rewards'], self.locals['dones']):
+            if done:
+                self._add_metric(reward)
+
+        self.step_in_level += len(self.locals['infos'])
+        not_too_early = self.min_step < self.num_timesteps
+        filled_buffer = len(self.average_progress) >= self.probes_to_account
+        exceed_level = np.mean(self.average_progress) > self.threshold_delta
+        force_increase = self.step_to_increase < self.step_in_level
+        not_to_early_local = self.not_to_early_threshold < self.step_in_level
+
+        if (not_too_early and filled_buffer and exceed_level and not_to_early_local) or force_increase:
+            self._increase_level()
+            self.dummyVecEnv.reset()
+            print("Next Level: {}".format(self.current_level))
+        return True
