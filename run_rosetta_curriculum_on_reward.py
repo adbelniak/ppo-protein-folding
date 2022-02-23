@@ -63,7 +63,7 @@ if __name__ == '__main__':
     settings = environment_settings()
 
     env = DummyVecEnv([make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(256)])
-    n_timesteps = 10000000
+    n_timesteps = 15000000
     policy_kwargs = {
         "features_extractor_kwargs": {
             "embedding_dim": 16,
@@ -77,7 +77,7 @@ if __name__ == '__main__':
                                                     window_size=50000, min_step=100000, envs=env)
 
     single_process_model = MaskablePPO(MaskableActorCriticTransformerPolicy, env,  verbose=1,
-                               tensorboard_log='./logs',  n_steps=32, ent_coef=0.001, policy_kwargs=policy_kwargs)
+                               tensorboard_log='./logs_cur',  n_steps=32, ent_coef=0.001, policy_kwargs=policy_kwargs)
 
     single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance, curriculum_calback])
     single_process_model.save(args.saving_directory)
