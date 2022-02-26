@@ -287,7 +287,7 @@ class CuriosityWrapper(DummyVecEnv):
             total_loss+= loss
             self.optimizer.step()
         self.logger.record_mean("train/predictor_loss",
-                                np.mean(total_loss / self.gradient_steps))
+                                total_loss / self.gradient_steps)
         print("Trained predictor. Avg loss: {}".format(total_loss / self.gradient_steps))
 
     def _update_int_reward_rms(self, reward: np.ndarray) -> None:
