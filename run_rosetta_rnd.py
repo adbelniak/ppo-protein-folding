@@ -63,9 +63,13 @@ def environment_settings():
 if __name__ == '__main__':
     args = arg_parse()
     settings = environment_settings()
-
-    env = CuriosityWrapper([make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(256)])
+    intrinsic_reward_weight = 1.0
     n_timesteps = 10000000
+
+    env = CuriosityWrapper(
+        [make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(256)],
+        intrinsic_reward_weight=intrinsic_reward_weight
+    )
     policy_kwargs = {
         "features_extractor_kwargs": {
             "embedding_dim": 16,
@@ -76,7 +80,7 @@ if __name__ == '__main__':
     save_on_distance = SaveOnBestDistance(window_size=500, min_step=1000000, min_step_freq=1000, best_model_prefix='best_distance_model')
 
     single_process_model = MaskablePPO(MaskableActorCriticTransformerPolicy, env,  verbose=1,
-                               tensorboard_log='./logs',  n_steps=32, ent_coef=0.001, policy_kwargs=policy_kwargs)
+                               tensorboard_log='./logs_rnd',  n_steps=32, ent_coef=0.001, policy_kwargs=policy_kwargs)
 
     single_process_model.learn(n_timesteps, callback=[TensorboardCallback(20), save_on_reward, save_on_distance])
     single_process_model.save(args.saving_directory)

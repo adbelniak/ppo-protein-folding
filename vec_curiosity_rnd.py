@@ -128,7 +128,7 @@ class CuriosityWrapper(DummyVecEnv):
     def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 1.0, buffer_size: int = 65536,
                  train_freq: int = 16384, gradient_steps: int = 4,
                  batch_size: int = 4096, learning_starts: int = 100, filter_end_of_episode: bool = True,
-                 filter_reward: bool = False, norm_obs: bool = True,
+                 filter_reward: bool = False, norm_obs: bool = False,
                  norm_ext_reward: bool = False, gamma: float = 0.99, learning_rate: float = 0.0001,
                  training: bool = True, _init_setup_model=True):
 
@@ -286,6 +286,8 @@ class CuriosityWrapper(DummyVecEnv):
             loss.backward()
             total_loss+= loss
             self.optimizer.step()
+        self.logger.record_mean("train/predictor_loss",
+                                np.mean(total_loss / self.gradient_steps))
         print("Trained predictor. Avg loss: {}".format(total_loss / self.gradient_steps))
 
     def _update_int_reward_rms(self, reward: np.ndarray) -> None:
@@ -298,16 +300,6 @@ class CuriosityWrapper(DummyVecEnv):
         self.ext_ret = self.gamma * self.ext_ret + reward
         self.ext_rwd_rms.update(self.ext_ret)
 
-    def normalize_obs(self, obs: np.ndarray, key: str) -> np.ndarray:
-        """
-        Normalize observations using observations statistics.
-        Calling this method does not update statistics.
-        """
-        if self.norm_obs:
-            obs = np.clip((obs - self.obs_rms[key].mean) / np.sqrt(self.obs_rms[key].var + self.epsilon),
-                          -self.clip_obs,
-                          self.clip_obs)
-        return obs
 
     def get_parameter_list(self):
         return self.params
