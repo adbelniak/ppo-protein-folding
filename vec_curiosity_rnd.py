@@ -125,7 +125,7 @@ class CuriosityWrapper(DummyVecEnv):
     :param learning_rate: (float) Learning rate for the Adam optimizer of the predictor network.
     """
 
-    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 1.0, buffer_size: int = 65536,
+    def __init__(self, env_fns, network: str = "mlp", intrinsic_reward_weight: float = 1.0, buffer_size: int = 2*65536,
                  train_freq: int = 16384, gradient_steps: int = 4,
                  batch_size: int = 4096, learning_starts: int = 100, filter_end_of_episode: bool = True,
                  filter_reward: bool = False, norm_obs: bool = False,

@@ -64,11 +64,15 @@ if __name__ == '__main__':
     args = arg_parse()
     settings = environment_settings()
     intrinsic_reward_weight = 1.0
+    num_envs = 256
+    episod_length = 64
     n_timesteps = 10000000
+    train_freq = num_envs * episod_length * 5
 
     env = CuriosityWrapper(
-        [make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(256)],
-        intrinsic_reward_weight=intrinsic_reward_weight
+        [make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(num_envs)],
+        intrinsic_reward_weight=intrinsic_reward_weight,
+        train_freq=train_freq
     )
     policy_kwargs = {
         "features_extractor_kwargs": {
