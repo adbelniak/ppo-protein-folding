@@ -72,7 +72,8 @@ if __name__ == '__main__':
     env = CuriosityWrapper(
         [make_env('gym_rosetta:protein-fold-v0', i, **settings) for i in range(num_envs)],
         intrinsic_reward_weight=intrinsic_reward_weight,
-        train_freq=train_freq
+        train_freq=train_freq,
+        buffer_size= train_freq*10
     )
     policy_kwargs = {
         "features_extractor_kwargs": {
